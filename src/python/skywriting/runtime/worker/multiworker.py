@@ -336,3 +336,39 @@ class WorkerThreadPool:
         if task_record.success:
             task.taskset.task_graph.spawn_and_publish(task_record.spawned_tasks, task_record.published_refs, next_td)
         task.taskset.dec_runnable_count()
+        
+        
+class RCCECorePool:
+    
+    def __init__(self, bus, name, queue_manager, num_cores=47):
+        self.bus = bus
+        self.name = name
+        self.queue_manager = queue_manager
+        self.num_cores = num_cores
+        self.is_running = False
+        self.pids = []
+        
+    def subscribe(self):
+        self.bus.subscribe('start', self.start)
+        # Must run after QueueManager.stop()
+        self.bus.subscribe('stop', self.stop, 50)
+            
+    def unsubscribe(self):
+        self.bus.unsubscribe('start', self.start)
+        self.bus.unsubscribe('stop', self.stop)
+            
+    def start(self):
+        self.is_running = True
+        for _ in range(self.num_cores):
+            #t = threading.Thread(target=self.thread_main, args=())
+            #self.threads.append(t)
+            #t.start()
+            pass
+                
+    def stop(self):
+        self.is_running = False
+        for pid in self.pids:
+            #thread.join()
+            pass
+        self.pids = []
+        
