@@ -28,16 +28,6 @@ int s; 			// socket descriptor
 FILE *sockfd;	// socket FD
 
 
-int main(int argc, char **argv) {
-
-	// This shouldn't usually be called
-	printf("Use libciel-scc as a shared library; it cannot be run directly. Exiting.\n");
-
-	return EXIT_SUCCESS;
-
-}
-
-
 void tr_init(int argc, char **argv) {
 
 #ifdef RCCE
