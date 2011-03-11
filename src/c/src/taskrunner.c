@@ -38,12 +38,9 @@ int main(int argc, char **argv) {
 }
 
 
-void tr_init() {
+void tr_init(int argc, char **argv) {
 
 #ifdef RCCE
-
-	int argc;
-	char **argv;
 
 	printf("RCCE enabled\n");
 

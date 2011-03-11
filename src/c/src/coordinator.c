@@ -34,12 +34,9 @@ socklen_t from_len;
 
 #define FD_STDOUT 1
 
-void coord_init() {
+void coord_init(int argc, char **argv) {
 
 #ifdef RCCE
-
-	int argc;
-	char **argv;
 
 	printf("RCCE enabled\n");
 
