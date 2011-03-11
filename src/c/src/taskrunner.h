@@ -10,4 +10,8 @@
 
 #include "common.h"
 
+void tr_init(int argc, char **argv);
+void tr_send();
+void tr_hello();
+
 #endif /* TASKRUNNER_H */

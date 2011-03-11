@@ -16,9 +16,11 @@ INCLUDES := -I$(RCCEROOT)/include -I$(IRCCEROOT)/include
 ifeq ($(ENABLE_RCCE),1)
 	DEF := -DRCCE
 	CCFLAGS := $(CCFLAGS) -m32
+	LIBCIELOBJS := taskrunner.o coordinator.o   $(ARCHIVE)
+else
+	LIBCIELOBJS := taskrunner.o coordinator.o sock-common.o  $(ARCHIVE)
 endif 
 
-LIBCIELOBJS := taskrunner.o coordinator.o sock-common.o  $(ARCHIVE)
 
 default:
 	@echo "Usage: make loader  "

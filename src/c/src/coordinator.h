@@ -14,4 +14,10 @@
 static int coord_sock_init();
 #endif
 
+void coord_init(int argc, char **argv);
+void coord_read();
+void coord_quit();
+void coord_hello();
+
+
 #endif /* COORDINATOR_H */

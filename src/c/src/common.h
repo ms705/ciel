@@ -36,3 +36,16 @@
 #define MASTER "libciel-scc-socket"
 
 #endif
+
+
+/**
+ * Stub main function in case anyone ever tries to run this directly.
+ */
+int main(int argc, char **argv) {
+
+	// This shouldn't usually be called
+	printf("Use libciel-scc as a shared library; it cannot be run directly. Exiting.\n");
+
+	return EXIT_SUCCESS;
+
+}
