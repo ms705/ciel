@@ -106,7 +106,11 @@ void coord_read() {
 
     char buf[1024];
 
+#ifdef RCCE
+    RECV(buf, sizeof(buf), 1); // XXX hardcoded remote rank
+#else
     RECV(buf, sizeof(buf), s);
+#endif
 
 }
 
