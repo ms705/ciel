@@ -74,7 +74,7 @@ void coord_read(void) {
 #ifdef RCCE
 
     iRCCE_RECV_REQUEST* finisher_request;
-
+    int i;
 
     // XXX hardcoded remote rank
     /*if (RECV(buf, sizeof(buf), 1) != iRCCE_SUCCESS) {
