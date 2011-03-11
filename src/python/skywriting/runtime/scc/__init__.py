@@ -73,9 +73,9 @@ def scc_taskrunner_main(options, args):
     numcores = 48
     corelist = []
     for i in range(numcores):
-        corelist += str(i)
-    argc = c_int(numcores)
-    targv = c_char_p * numcores
+        corelist.append(str(i))
+    argc = c_int(numcores + 3)
+    targv = c_char_p * (numcores + 3)
     argv = targv("libciel-scc", str(numcores), "0.533", *corelist)
     lib.tr_init(argc, argv)
     
@@ -99,17 +99,18 @@ def scc_coordinator_main(options, args):
     numcores = 48
     corelist = []
     for i in range(numcores):
-        corelist += str(i)
-    argc = c_int(numcores)
-    targv = c_char_p * numcores
+        corelist.append(str(i))
+    argc = c_int(numcores + 3)
+    targv = c_char_p * (numcores + 3)
     argv = targv("libciel-scc", str(numcores), "0.533", *corelist)
     lib.coord_init(argc, argv)
     
-    mp = POINTER(MESSAGE)
-    coord_read = lib.coord_read()
+    mp = MESSAGE
+    coord_read = lib.coord_read
     coord_read.restype = mp 
     while True:
         # At the coordinator, we keep waiting for messages and return once we have received one
         msg = coord_read()
-        print "message from core %d: %s" % (msg.source, string_at(msg.msg_body)) 
+        #, string_at(msg.contents.msg_body)
+        print "message from core %d" % (msg.source) 
     

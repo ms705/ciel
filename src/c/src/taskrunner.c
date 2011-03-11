@@ -11,7 +11,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
-#include "strings.h"
+#include <strings.h>
+#include <stdint.h>
 
 #include "taskrunner.h"
 

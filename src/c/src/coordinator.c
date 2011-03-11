@@ -70,8 +70,9 @@ void coord_init(int argc, char **argv) {
 
 message_t coord_read(void) {
 
-    char buf[1024];
+    char *buf = (char *)malloc(1024);
     int n_recv;
+    //message_t *msg = (message_t *)malloc(sizeof(message_t));
     message_t msg;
 
 #ifdef RCCE
@@ -106,6 +107,13 @@ message_t coord_read(void) {
 
     if (n_recv > 0)
     	printf("%s\n", buf);
+
+    msg.source = 0;
+    msg.msg_body = buf;
+
+    return msg;
+
+
 #endif
 
 
