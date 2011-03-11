@@ -10,6 +10,6 @@
 
 #include "common.h"
 
-int coord_sock_init();
+static int coord_sock_init();
 
 #endif /* COORDINATOR_H */

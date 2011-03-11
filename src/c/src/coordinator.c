@@ -36,6 +36,8 @@ socklen_t from_len;
 
 void coord_init(int argc, char **argv) {
 
+	int i;
+
 #ifdef RCCE
 
 	printf("RCCE enabled\n");
@@ -65,7 +67,7 @@ void coord_init(int argc, char **argv) {
 }
 
 #ifndef RCCE
-int coord_sock_init() {
+static int coord_sock_init() {
 
     register int len;
 
