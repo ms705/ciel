@@ -37,7 +37,8 @@
 
 
 typedef struct {
-	uint8_t source;
+	uint32_t source;
+	uint32_t length;
 	char *msg_body;
 } message_t;
 
