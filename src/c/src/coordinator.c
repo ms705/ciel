@@ -35,6 +35,9 @@ void coord_init() {
 
 #ifdef RCCE
 
+	int argc;
+	char **argv;
+
 	printf("RCCE enabled\n");
 
 	RCCE_init(&argc, &argv);

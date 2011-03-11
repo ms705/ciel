@@ -42,9 +42,12 @@ void tr_init() {
 
 #ifdef RCCE
 
+	int argc;
+	char **argv;
+
 	printf("RCCE enabled\n");
 
-	RCCE_init();
+	RCCE_init(&argc, &argv);
     iRCCE_init();
 
     iRCCE_init_wait_list(&general_waitlist);
