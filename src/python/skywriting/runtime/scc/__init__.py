@@ -65,8 +65,8 @@ def scc_taskrunner_main(options, args):
     
     lib.tr_hello()
     #redirect_stdout()
-    argc = ctypes.c_int(4)
-    targv = ctypes.c_char_p * 4 
+    argc = c_int(4)
+    targv = c_char_p * 4 
     argv = targv("2", "0.533", "00" "01")
     lib.tr_init(argc, argv)
     
@@ -86,8 +86,8 @@ def scc_coordinator_main(options, args):
     
     lib.coord_hello()
     #redirect_stdout()
-    argc = ctypes.c_int(4)
-    targv = ctypes.c_char_p * 4 
+    argc = c_int(4)
+    targv = c_char_p * 4 
     argv = targv("2", "0.533", "00" "01")
     lib.coord_init()
     
