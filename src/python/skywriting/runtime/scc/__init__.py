@@ -65,9 +65,9 @@ def scc_taskrunner_main(options, args):
     
     lib.tr_hello()
     #redirect_stdout()
-    argc = c_int(5)
-    targv = c_char_p * 5
-    argv = targv("libciel-scc", "2", "0.533", "00", "01")
+    argc = c_int(27)
+    targv = c_char_p * 27
+    argv = targv("libciel-scc", "24", "0.533", "00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24")
     lib.tr_init(argc, argv)
     
     while True:
@@ -86,9 +86,9 @@ def scc_coordinator_main(options, args):
     
     lib.coord_hello()
     #redirect_stdout()
-    argc = c_int(5)
-    targv = c_char_p * 5 
-    argv = targv("libciel-scc", "2", "0.533", "00", "01")
+    argc = c_int(27)
+    targv = c_char_p * 27
+    argv = targv("libciel-scc", "24", "0.533", "00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24")
     lib.coord_init(argc, argv)
     
     while True:
