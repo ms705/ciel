@@ -1,6 +1,8 @@
 #!/bin/bash
 mkdir -p ext
 cd ext
+
+# Mahout
 wget -N http://www.cl.cam.ac.uk/netos/ciel/misc/mahout-0.3.tar.bz2
 if [ mahout-timestamp -ot mahout-0.3.tar.bz2 ]
 then
@@ -8,6 +10,7 @@ then
     touch -r mahout-0.3.tar.bz2 mahout-timestamp
 fi
 
+# GSON
 wget -N http://google-gson.googlecode.com/files/google-gson-1.6-release.zip
 if [ gson-timestamp -ot google-gson-1.6-release.zip ]
 then
@@ -15,6 +18,7 @@ then
     touch -r google-gson-1.6-release.zip gson-timestamp
 fi
 
+# RCCE
 if [ -d rcce ]
 then
 	svn up rcce/
@@ -23,3 +27,11 @@ else
 	svn co http://marcbug.scc-dc.com/svn/repository/trunk/rcce/ rcce/
 fi
 
+# iRCCE
+wget -N http://communities.intel.com/servlet/JiveServlet/download/110482-19045/iRCCE.tar.zip
+if [ ircce-timestamp -ot iRCCE.tar.zip ]
+then
+	unzip iRCCE.tar.zip
+	tar -xf iRCCE.tar
+	touch -r iRCCE.tar.zip icce-timestamp
+fi

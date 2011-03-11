@@ -33,7 +33,7 @@ fi
 
 if [[ $3 == '' ]]; then
     SWUSER='root'
-elif [[ $2 == 'scc' ]]; then
+elif [[ $3 == 'scc' ]]; then
     SWUSER='root'
     BOOTSTRAP_SCRIPT="sw-deploy-local-scc.sh"
 else
