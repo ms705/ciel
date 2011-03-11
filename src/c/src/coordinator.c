@@ -27,8 +27,6 @@ iRCCE_SEND_REQUEST *send_requests;
 int s; 			// socket descriptor
 FILE *sockfd;	// socket FD
 struct sockaddr_un saun;
-struct sockaddr_un from_saun;
-socklen_t from_len;
 
 #endif
 
@@ -107,27 +105,8 @@ static int coord_sock_init() {
 void coord_read() {
 
     char buf[1024];
-    int rval, i;
 
-#ifndef RCCE
-
-    int msgsock = accept(s, (const struct sockaddr *)&from_saun, &from_len);
-    if (msgsock == -1)
-            //perror("accept failed");
-			return;
-    else do {
-            memset(buf, 0, sizeof(buf));
-            if ((rval  = read(msgsock, buf,  1024)) < 0)
-                    perror("reading stream message");
-            i = 0;
-            if (rval == 0)
-                    printf("Ending connection\n");
-            else
-                    printf("-->%s\n", buf);
-    } while (rval != 0);
-    close(msgsock);
-
-#endif
+    RECV(buf, sizeof(buf), s);
 
 }
 

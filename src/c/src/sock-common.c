@@ -7,6 +7,30 @@ void sock_send(int sockfd, char *data, size_t len) {
 
 }
 
+void sock_recv(int sockfd, char *buf, unsigned int len) {
+
+	struct sockaddr_un from_saun;
+	socklen_t from_len;
+    int rval, i;
+
+    int msgsock = accept(sockfd, (const struct sockaddr *)&from_saun, &from_len);
+    if (msgsock == -1)
+            //perror("accept failed");
+			return;
+    else do {
+            memset(buf, 0, len);
+            if ((rval  = read(msgsock, buf,  1024)) < 0)
+                    perror("reading stream message");
+            i = 0;
+            if (rval == 0)
+                    printf("Ending connection\n");
+            else
+                    printf("-->%s\n", buf);
+    } while (rval != 0);
+    close(msgsock);
+
+}
+
 
 void sock_set_nonblock(int socket) {
 	int flags;

@@ -9,10 +9,12 @@
 #ifdef RCCE
 
 #define SEND(B, L, D) iRCCE_isend((B), (L), (D), &send_requests)
+#define RECV(B, L, S) iRCCE_irecv((B), (L), (S), &recv_requests)
 
 #else
 
 #define SEND(B, L, D) sock_send((D), (B), (L))
+#define RECV(B, L, S) sock_recv((S), (B), (L))
 
 #endif
 
