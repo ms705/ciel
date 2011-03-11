@@ -44,9 +44,13 @@ void coord_init() {
 	printf("RCCE enabled\n");
 
 	RCCE_init(&argc, &argv);
-    iRCCE_init();
+	printf("RCCE init done\n");
+
+	iRCCE_init();
+	printf("iRCCE init done\n");
 
     iRCCE_init_wait_list(&general_waitlist);
+	printf("waitlist init done\n");
 
 #else
 
