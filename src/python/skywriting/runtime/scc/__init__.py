@@ -86,5 +86,6 @@ def scc_coordinator_main(options, args):
     lib.coord_init()
     
     while True:
+        print "read"
         lib.coord_read()
     

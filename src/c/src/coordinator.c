@@ -59,6 +59,8 @@ void coord_init() {
 
 #endif
 
+    printf("init finished");
+
 }
 
 #ifndef RCCE
