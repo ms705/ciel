@@ -112,6 +112,8 @@ void coord_read() {
     RECV(buf, sizeof(buf), s);
 #endif
 
+    printf(buf);
+
 }
 
 // send_message()
