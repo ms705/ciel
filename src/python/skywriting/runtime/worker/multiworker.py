@@ -356,7 +356,7 @@ class WorkerThreadPool:
         task.taskset.dec_runnable_count()
         
         
-class RCCECorePool:
+class SCCCorePool:
     
     def __init__(self, bus, name, queue_manager, num_cores=47):
         self.bus = bus
@@ -378,7 +378,7 @@ class RCCECorePool:
     def start(self):
         self.is_running = True
         for _ in range(self.num_cores):
-            #t = threading.Thread(target=self.thread_main, args=())
+            #t = threading.Thread(target=tr.thread_main, args=())
             #self.threads.append(t)
             #t.start()
             pass
