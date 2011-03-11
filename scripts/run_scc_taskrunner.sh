@@ -1,11 +1,9 @@
-#!/bin/bash
+#!/bin/sh
 BASE=$(dirname $(readlink -f $0))/..
 export PYTHONPATH=$PYTHONPATH:$BASE/src/python
 PYTHON=${PYTHON:-python}
 
-if [[ $REL_BLOCK_LOCATION == "" ]]; then
-    REL_BLOCK_LOCATION="store/"
-fi
+REL_BLOCK_LOCATION=${REL_BLOCK_LOCATION:-"store/"}
 
 MASTER=${MASTER_HOST:-http://`hostname -f`:8000}
 
