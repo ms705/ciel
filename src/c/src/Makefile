@@ -7,7 +7,7 @@ IRCCEROOT=$(EXTERNAL)/iRCCE
 
 ENABLE_RCCE = 0
 
-ARCHIVE := $(RCCEROOT)/bin/SCC_LINUX/libRCCE_smallflags_nongory_nopwrmgmt.a
+ARCHIVE := $(RCCEROOT)/bin/SCC_LINUX/libRCCE_bigflags_nongory_nopwrmgmt.a
 
 CCOMPILE := gcc
 CCFLAGS := -O3
