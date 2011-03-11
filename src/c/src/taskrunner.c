@@ -70,7 +70,7 @@ void tr_init(int argc, char **argv) {
 }
 
 
-void tr_send() {
+void tr_send(void) {
 
 	char c[100];
 	int len = sizeof(c);
@@ -90,7 +90,7 @@ void tr_send() {
 // start_exec()
 
 
-void tr_hello() {
+void tr_hello(void) {
 
 	printf("Hello from the RCCE task runner!\n");
 

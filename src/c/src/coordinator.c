@@ -102,7 +102,7 @@ static int coord_sock_init() {
 #endif
 
 
-void coord_read() {
+void coord_read(void) {
 
     char buf[1024];
 
@@ -121,7 +121,7 @@ void coord_read() {
 // start_exec()
 
 
-void coord_quit() {
+void coord_quit(void) {
 
 	printf("RCCE coordinator quitting\n");
 
@@ -135,7 +135,7 @@ void coord_quit() {
 
 }
 
-void coord_hello() {
+void coord_hello(void) {
 
 	printf("Hello from the RCCE coordinator!\n");
 

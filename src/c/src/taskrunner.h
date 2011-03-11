@@ -11,7 +11,7 @@
 #include "common.h"
 
 void tr_init(int argc, char **argv);
-void tr_send();
-void tr_hello();
+void tr_send(void);
+void tr_hello(void);
 
 #endif /* TASKRUNNER_H */
