@@ -5,6 +5,8 @@
  *      Author: ms705
  */
 
+#define FALSE 0
+#define TRUE 1
 
 #ifdef RCCE
 
@@ -25,15 +27,10 @@
 #include "RCCE.h"
 #include "iRCCE.h"
 
-// The master core ID -- TODO: this shouldn't be hardcoded
-#define MASTER 0
-
 #else
 
 // we'll fake out RCCE using sockets
 #include "sock-common.h"
-
-#define MASTER "libciel-scc-socket"
 
 #endif
 

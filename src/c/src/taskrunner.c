@@ -52,7 +52,7 @@ void tr_init(int argc, char **argv) {
 
     // Create the address to connect to
     saun.sun_family = AF_UNIX;
-    strcpy(saun.sun_path, MASTER);
+    strcpy(saun.sun_path, SOCK_ADDR);
 
     len = sizeof(saun.sun_family) + strlen(saun.sun_path);
 
@@ -72,11 +72,11 @@ void tr_init(int argc, char **argv) {
 
 void tr_send(void) {
 
-	char c[100];
+	char c[14];
 	int len = sizeof(c);
 	bzero(c, len);
 
-	sprintf(c, "Hello world!");
+	sprintf(c, "Hello world!\n");
 
 	SEND(c, len, s);
 

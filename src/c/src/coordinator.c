@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
+#include <stdint.h>
 
 #include "coordinator.h"
 
@@ -25,18 +26,18 @@ iRCCE_SEND_REQUEST *send_requests;
 #else
 
 int s; 			// socket descriptor
-FILE *sockfd;	// socket FD
-struct sockaddr_un saun;
 
 #endif
 
-#define FD_STDOUT 1
+uint8_t num_cores;
 
 void coord_init(int argc, char **argv) {
 
+	num_cores = atoi(argv[1]);
+
 #ifdef RCCE
 
-	printf("RCCE enabled\n");
+	printf("RCCE enabled for %d cores\n", num_cores);
 
 	RCCE_init(&argc, &argv);
 	printf("RCCE init done\n");
@@ -49,70 +50,57 @@ void coord_init(int argc, char **argv) {
 
 #else
 
-	int i;
+	printf("socket-based emulation mode, setting up %d sockets\n", num_cores);
 
-    if(coord_sock_init() > 1) {
-    	perror("Failed to set up socket, exiting");
-    	exit(1);
-    }
+	if(sock_init(&s, FALSE) > 1) {
+		perror("Failed to set up coordinator socket, exiting");
+		exit(1);
+	}
 
-    printf("coordinator sockets set up\n");
+    printf("coordinator socket set up\n");
 
 #endif
 
-    printf("init finished");
+    printf("coord_init() finished");
 
 }
-
-#ifndef RCCE
-static int coord_sock_init() {
-
-    register int len;
-
-    // Get a streaming UNIX domain socket
-    if ((s = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
-    	perror("socket creation error");
-    	return 1;
-    }
-
-    // Create the address to connect to
-    saun.sun_family = AF_UNIX;
-    strcpy(saun.sun_path, MASTER);
-
-    // delete the socket file if it still exists
-    unlink(MASTER);
-
-    len = sizeof(saun.sun_family) + strlen(saun.sun_path);
-
-    if (bind(s, (const struct sockaddr *)&saun, len) < 0) {
-    	perror("failed to bind to socket");
-    	return 1;
-    }
-
-    if (listen(s, 5) < 0) {
-    	perror("failed to listen on socket");
-    	return 1;
-    }
-
-    // Make the socket non-blocking
-    sock_set_nonblock(s);
-
-    return 0;
-}
-#endif
 
 
 void coord_read(void) {
 
     char buf[1024];
+    int n_recv;
 
 #ifdef RCCE
-    RECV(buf, sizeof(buf), 1); // XXX hardcoded remote rank
+
+    iRCCE_RECV_REQUEST* finisher_request;
+
+
+    // XXX hardcoded remote rank
+    /*if (RECV(buf, sizeof(buf), 1) != iRCCE_SUCCESS) {
+    	while (iRCCE_isend_test(recv_requests, NULL) != iRCCE_SUCCESS) {}
+    }*/
+
+    recv_requests = (iRCCE_RECV_REQUEST*)malloc(num_cores*sizeof(iRCCE_RECV_REQUEST));
+
+    for (i=1; i < num_cores; i++) {
+    	iRCCE_irecv(buf, sizeof(buf), i, &recv_requests[i]);
+    	iRCCE_add_to_wait_list(&general_waitlist, NULL, &recv_requests[i]);
+    }
+
+    // Use iRCCE_wait_any() function:
+	iRCCE_wait_any(&general_waitlist, NULL, &finisher_request);
+
+	printf("got a message from core %d: %s\n", finisher_request->source, buf);
+
+
 #else
-    RECV(buf, sizeof(buf), s);
+    n_recv = RECV(buf, sizeof(buf), s);
+
+    if (n_recv > 0)
+    	printf("%s\n", buf);
 #endif
 
-    printf(buf);
 
 }
 

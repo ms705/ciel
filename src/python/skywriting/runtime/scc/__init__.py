@@ -70,7 +70,8 @@ def scc_taskrunner_main(options, args):
     argv = targv("libciel-scc", "2", "0.533", "00", "01")
     lib.tr_init(argc, argv)
     
-    lib.tr_send()
+    while True:
+        lib.tr_send()
         
     
     
@@ -90,5 +91,6 @@ def scc_coordinator_main(options, args):
     argv = targv("libciel-scc", "2", "0.533", "00", "01")
     lib.coord_init(argc, argv)
     
-    lib.coord_read()
+    while True:
+        lib.coord_read()
     
