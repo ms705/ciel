@@ -16,18 +16,21 @@
 
 //int num_ranks, remote_rank, my_rank;
 #ifdef RCCE
+
 iRCCE_WAIT_LIST general_waitlist;
 
 iRCCE_RECV_REQUEST *recv_requests;
 iRCCE_SEND_REQUEST *send_requests;
-#endif
 
+#else
 
 int s; 			// socket descriptor
 FILE *sockfd;	// socket FD
 struct sockaddr_un saun;
 struct sockaddr_un from_saun;
 socklen_t from_len;
+
+#endif
 
 #define FD_STDOUT 1
 
@@ -58,7 +61,7 @@ void coord_init() {
 
 }
 
-
+#ifndef RCCE
 int coord_sock_init() {
 
     register int len;
@@ -93,12 +96,15 @@ int coord_sock_init() {
 
     return 0;
 }
+#endif
 
 
 void coord_read() {
 
     char buf[1024];
     int rval, i;
+
+#ifndef RCCE
 
     int msgsock = accept(s, (const struct sockaddr *)&from_saun, &from_len);
     if (msgsock == -1)
@@ -115,6 +121,8 @@ void coord_read() {
                     printf("-->%s\n", buf);
     } while (rval != 0);
     close(msgsock);
+
+#endif
 
 }
 
