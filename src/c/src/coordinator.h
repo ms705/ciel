@@ -10,6 +10,8 @@
 
 #include "common.h"
 
+#ifndef RCCE
 static int coord_sock_init();
+#endif
 
 #endif /* COORDINATOR_H */

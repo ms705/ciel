@@ -34,8 +34,6 @@ struct sockaddr_un saun;
 
 void coord_init(int argc, char **argv) {
 
-	int i;
-
 #ifdef RCCE
 
 	printf("RCCE enabled\n");
@@ -50,6 +48,8 @@ void coord_init(int argc, char **argv) {
 	printf("waitlist init done\n");
 
 #else
+
+	int i;
 
     if(coord_sock_init() > 1) {
     	perror("Failed to set up socket, exiting");

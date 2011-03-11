@@ -8,8 +8,8 @@
 
 #ifdef RCCE
 
-#define SEND(B, L, D) iRCCE_isend((B), (L), (D), &send_requests)
-#define RECV(B, L, S) iRCCE_irecv((B), (L), (S), &recv_requests)
+#define SEND(B, L, D) iRCCE_isend((B), (L), (D), send_requests)
+#define RECV(B, L, S) iRCCE_irecv((B), (L), (S), recv_requests)
 
 #else
 
