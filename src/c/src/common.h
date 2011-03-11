@@ -20,7 +20,8 @@
 
 #ifdef RCCE
 
-#include <iRCCE.h>
+#include "RCCE.h"
+#include "iRCCE.h"
 
 // The master core ID -- TODO: this shouldn't be hardcoded
 #define MASTER 0

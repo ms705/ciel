@@ -91,7 +91,7 @@ void tr_send() {
 
 	sprintf(c, "Hello world!");
 
-	SEND(c, len, s);
+	//SEND(c, len, s);
 
 }
 
