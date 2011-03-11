@@ -35,6 +35,12 @@
 #endif
 
 
+typedef struct {
+	uint8_t source;
+	char *msg_body;
+} message_t;
+
+
 #if 0
 /**
  * Stub main function in case anyone ever tries to run this directly.
