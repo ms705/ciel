@@ -11,7 +11,7 @@
 #include "common.h"
 
 void coord_init(int argc, char **argv);
-void coord_read(void);
+message_t coord_read(void);
 void coord_quit(void);
 void coord_hello(void);
 

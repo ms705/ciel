@@ -44,6 +44,10 @@ class SCCTaskRunner:
         task.taskset.dec_runnable_count()
 
 
+class MESSAGE(Structure):
+    _fields_ = [("source", c_int), ("msg_body", c_char_p)]
+
+
 def redirect_stdout():
     print "Redirecting stdout"
     sys.stdout.flush() # <--- important when redirecting to files
@@ -66,7 +70,7 @@ def scc_taskrunner_main(options, args):
     lib.tr_hello()
     #redirect_stdout()
     
-    numcores = 47
+    numcores = 48
     corelist = []
     for i in range(numcores):
         corelist += str(i)
@@ -92,7 +96,7 @@ def scc_coordinator_main(options, args):
     lib.coord_hello()
     #redirect_stdout()
     
-    numcores = 47
+    numcores = 48
     corelist = []
     for i in range(numcores):
         corelist += str(i)
@@ -101,6 +105,11 @@ def scc_coordinator_main(options, args):
     argv = targv("libciel-scc", str(numcores), "0.533", *corelist)
     lib.coord_init(argc, argv)
     
+    mp = POINTER(MESSAGE)
+    coord_read = lib.coord_read()
+    coord_read.restype = mp 
     while True:
-        lib.coord_read()
+        # At the coordinator, we keep waiting for messages and return once we have received one
+        msg = coord_read()
+        print "message from core %d: %s" % (msg.source, string_at(msg.msg_body)) 
     

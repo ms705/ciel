@@ -45,6 +45,8 @@ void coord_init(int argc, char **argv) {
 	iRCCE_init();
 	printf("iRCCE init done\n");
 
+	//RCCE_barrier(&RCCE_COMM_WORLD);
+
     iRCCE_init_wait_list(&general_waitlist);
 	printf("waitlist init done\n");
 
@@ -66,10 +68,11 @@ void coord_init(int argc, char **argv) {
 }
 
 
-void coord_read(void) {
+message_t coord_read(void) {
 
     char buf[1024];
     int n_recv;
+    message_t msg;
 
 #ifdef RCCE
 
@@ -93,6 +96,10 @@ void coord_read(void) {
 
 	printf("got a message from core %d: %s\n", finisher_request->source, buf);
 
+    msg.source = finisher_request->source;
+    msg.msg_body = buf;
+
+    return msg;
 
 #else
     n_recv = RECV(buf, sizeof(buf), s);
