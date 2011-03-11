@@ -70,8 +70,8 @@ void coord_init(int argc, char **argv) {
 
 message_t coord_read(void) {
 
-    char *buf = (char *)malloc(1024);
-    int n_recv;
+    char *buf;
+    int n_recv, msg_size;
     //message_t *msg = (message_t *)malloc(sizeof(message_t));
     message_t msg;
 
@@ -88,14 +88,18 @@ message_t coord_read(void) {
     recv_requests = (iRCCE_RECV_REQUEST*)malloc(num_cores*sizeof(iRCCE_RECV_REQUEST));
 
     for (i=1; i < num_cores; i++) {
-    	iRCCE_irecv(buf, sizeof(buf), i, &recv_requests[i]);
+    	iRCCE_irecv((char *)&msg_size, sizeof(uint32_t), i, &recv_requests[i]);
     	iRCCE_add_to_wait_list(&general_waitlist, NULL, &recv_requests[i]);
     }
 
     // Use iRCCE_wait_any() function:
 	iRCCE_wait_any(&general_waitlist, NULL, &finisher_request);
 
-	printf("got a message from core %d: %s\n", finisher_request->source, buf);
+	printf("got a message of length %d from core %d\n", msg_size, finisher_request->source);
+
+	// Now actually receive the message (in blocking mode)
+	buf = (char *)malloc(msg_size*sizeof(char));
+	iRCCE_recv(buf, msg_size, finisher_request->source);
 
     msg.source = finisher_request->source;
     msg.msg_body = buf;
