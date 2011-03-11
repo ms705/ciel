@@ -8,7 +8,7 @@
 
 #ifdef RCCE
 
-#define SEND(B, L, D) iRCCE_isend((B), (L), (D), &send_request)
+#define SEND(B, L, D) iRCCE_isend((B), (L), (D), &send_requests)
 
 #else
 
