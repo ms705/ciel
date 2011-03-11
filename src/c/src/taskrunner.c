@@ -79,7 +79,8 @@ void tr_send(void) {
 
 	sprintf(c, "Hello world!\n");
 
-	SEND(c, len, s);
+	SEND((char *)&len, len, s);
+	SEND_B(c, len, s);
 
 }
 

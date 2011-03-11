@@ -111,6 +111,5 @@ def scc_coordinator_main(options, args):
     while True:
         # At the coordinator, we keep waiting for messages and return once we have received one
         msg = coord_read()
-        #, string_at(msg.contents.msg_body)
-        print "message from core %d" % (msg.source) 
+        print "message from core %d: %s" % (msg.source, string_at(msg.contents.msg_body)) 
     
