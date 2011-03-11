@@ -48,9 +48,9 @@ void tr_init() {
 	printf("RCCE enabled\n");
 
 	RCCE_init(&argc, &argv);
-    iRCCE_init();
+	iRCCE_init();
 
-    iRCCE_init_wait_list(&general_waitlist);
+	iRCCE_init_wait_list(&general_waitlist);
 
 #else
 
