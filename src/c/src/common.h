@@ -38,6 +38,7 @@
 #endif
 
 
+#if 0
 /**
  * Stub main function in case anyone ever tries to run this directly.
  */
@@ -49,3 +50,4 @@ int main(int argc, char **argv) {
 	return EXIT_SUCCESS;
 
 }
+#endif
