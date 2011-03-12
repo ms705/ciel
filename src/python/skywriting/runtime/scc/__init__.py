@@ -45,7 +45,10 @@ class SCCTaskRunner:
 
 
 class MESSAGE(Structure):
-    _fields_ = [("source", c_uint), ("length", c_uint), ("msg_body", c_char_p)]
+    _fields_ = [("source", c_uint),
+                ("dest", c_uint), 
+                ("length", c_uint), 
+                ("msg_body", c_char_p)]
 
 
 def redirect_stdout():
@@ -79,7 +82,12 @@ def scc_taskrunner_main(options, args):
     argv = targv("libciel-scc", str(numcores), "0.533", *corelist)
     lib.tr_init(argc, argv)
     
+    tr_read = lib.tr_read
+    tr_read.restype = MESSAGE
     while True:
+        msg = tr_read()
+        print "message from coordinator (%d): %s (length %d)" % (msg.source, string_at(msg.msg_body), msg.length) 
+        # task stuff
         lib.tr_send()
         
     
@@ -105,12 +113,13 @@ def scc_coordinator_main(options, args):
     argv = targv("libciel-scc", str(numcores), "0.533", *corelist)
     lib.coord_init(argc, argv)
     
-    mp = MESSAGE
     coord_read = lib.coord_read
-    coord_read.restype = mp
+    coord_read.restype = MESSAGE
+    coord_send = lib.coord_send
+    testmsg = MESSAGE(0, 1, 32, "Hello from the coordinator!")
     while True:
+        coord_send(testmsg)
         # At the coordinator, we keep waiting for messages and return once we have received one
         msg = coord_read()
-        #print "message from core %d: %s (length %d)" % (msg.source, string_at(msg.msg_body), msg.length) 
-        print "message from core %d" % (msg.source)
+        print "message from core %d: %s (length %d)" % (msg.source, string_at(msg.msg_body), msg.length) 
     

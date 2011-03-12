@@ -8,6 +8,8 @@
 #define FALSE 0
 #define TRUE 1
 
+#define COORDINATOR_CORE 0
+
 #ifdef RCCE
 
 #define SEND(B, L, D) iRCCE_isend((B), (L), (D), send_requests)
@@ -16,7 +18,8 @@
 
 #else
 
-#define SEND(B, L, D) sock_send((D), (B), (L))
+#define SEND(B, L, D) sock_send((D), (B), (L))   // TODO: this isn't necessarily non-blocking at the moment
+#define SEND_B(B, L, D) sock_send((D), (B), (L)) // TODO: this isn't necessarily blocking at the moment
 #define RECV(B, L, S) sock_recv((S), (B), (L))
 
 #endif
@@ -38,6 +41,7 @@
 
 typedef struct {
 	uint32_t source;
+	uint32_t dest;
 	uint32_t length;
 	char *msg_body;
 } message_t;
