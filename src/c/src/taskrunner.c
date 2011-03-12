@@ -60,19 +60,19 @@ void tr_init(int argc, char **argv) {
 }
 
 
-void tr_send(void) {
+void tr_send(message_t msg) {
 
-	char c[14];
+	/*char c[14];
 	int len = sizeof(c);
 	bzero(c, len);
 
-	sprintf(c, "Hello world!\n");
+	sprintf(c, "Hello world!\n");*/
 
-	printf("sending message length (%d)\n", len);
-	SEND((char *)&len, len, COORDINATOR_CORE);
+	printf("sending message length (%d)\n", msg.length);
+	SEND((char *)&msg.length, sizeof(uint32_t), msg.dest);
 
-	printf("sending actual message (%s)\n", c);
-	SEND_B(c, len, COORDINATOR_CORE);
+	printf("sending actual message (%s)\n", msg.msg_body);
+	SEND_B(msg.msg_body, msg.length, msg.dest);
 
 }
 
