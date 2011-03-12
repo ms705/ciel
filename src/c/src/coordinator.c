@@ -76,6 +76,7 @@ message_t coord_read(void) {
     int n_recv, msg_size;
     //message_t *msg = (message_t *)malloc(sizeof(message_t));
     message_t msg;
+    uint8_t i;
 
     msg.dest = COORDINATOR_CORE;
 
@@ -94,6 +95,7 @@ message_t coord_read(void) {
     for (i=1; i < num_cores; i++) {
     	iRCCE_irecv((char *)&msg_size, sizeof(uint32_t), i, &recv_requests[i]);
     	iRCCE_add_to_wait_list(&general_waitlist, NULL, &recv_requests[i]);
+    	printf("non-blocking recv from core %d initiated\n", i);
     }
 
     // Use iRCCE_wait_any() function:
