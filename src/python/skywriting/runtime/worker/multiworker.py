@@ -15,6 +15,7 @@ from skywriting.runtime.exceptions import ReferenceUnavailableException,\
     AbortedException
 from skywriting.runtime.local_task_graph import LocalTaskGraph, LocalJobOutput
 from skywriting.runtime.task_executor import TaskExecutionRecord
+from skywriting.runtime.scc import SCCCoordinator
 import Queue
 import ciel
 import logging
@@ -89,7 +90,10 @@ class MultiWorker:
         self.jobs = {}
         self._lock = threading.Lock()
         self.queue_manager = QueueManager(bus, self)
-        self.thread_pool = WorkerThreadPool(bus, 'q', self.queue_manager, num_threads)
+        if worker.role == 'scc_coordinator':
+            self.thread_pool = SCCCorePool(bus, 'q', self.queue_manager, 48)
+        else:
+            self.thread_pool = WorkerThreadPool(bus, 'q', self.queue_manager, num_threads)
     
     def subscribe(self):
         self.queue_manager.subscribe()
@@ -358,13 +362,14 @@ class WorkerThreadPool:
         
 class SCCCorePool:
     
-    def __init__(self, bus, name, queue_manager, num_cores=47):
+    def __init__(self, bus, name, queue_manager, num_cores=48):
         self.bus = bus
         self.name = name
         self.queue_manager = queue_manager
         self.num_cores = num_cores
         self.is_running = False
-        self.pids = []
+        
+        ciel.log("SCCCorePool initializing", "SCC", logging.INFO)
         
     def subscribe(self):
         self.bus.subscribe('start', self.start)
@@ -377,16 +382,13 @@ class SCCCorePool:
             
     def start(self):
         self.is_running = True
-        for _ in range(self.num_cores):
-            #t = threading.Thread(target=tr.thread_main, args=())
-            #self.threads.append(t)
-            #t.start()
-            pass
+        from skywriting.runtime.scc import *
+        ciel.log("Starting SCC coordinator main thread", "SCC", logging.INFO)
+        c = SCCCoordinator(self.name, self.queue_manager, self.num_cores)
+        self.thread = threading.Thread(target=c.thread_main, args=())
+        self.thread.start()
                 
     def stop(self):
         self.is_running = False
-        for pid in self.pids:
-            #thread.join()
-            pass
-        self.pids = []
+        self.thread.join()
         

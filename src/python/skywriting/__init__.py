@@ -80,15 +80,12 @@ def main(default_role=None):
         from skywriting.runtime.scc import scc_taskrunner_main
         scc_taskrunner_main(options, args)
     elif options.role == 'scc_coordinator':
-        from skywriting.runtime.scc import scc_coordinator_main
-        # XXX: add something to signal to the worker that we want a core pool instead of a multiworker thread pool
-        scc_coordinator_main(options, args)
         from skywriting.runtime.worker import worker_main
         if not cherrypy.config.get('server.socket_port'):
             parser.print_help()
             print >> sys.stderr, "Must specify port for worker with --port\n"
             sys.exit(1)
-        #worker_main(options)
+        worker_main(options)
     else:
         raise
     

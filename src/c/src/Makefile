@@ -36,7 +36,7 @@ streamfs: streamfs.c
 	$(CCOMPILE) -Wall -Werror -D_FILE_OFFSET_BITS=64 -o streamfs streamfs.c -lfuse -lpthread
 
 %.o: %.c
-	$(CCOMPILE) $(CCFLAGS) -fPIC -g -c -w1 $(INCLUDES) $(DEF) $<
+	$(CCOMPILE) $(CCFLAGS) -fPIC -g -c -Wall $(INCLUDES) $(DEF) $<
 
 libciel-scc: $(LIBCIELOBJS)
 	$(CCOMPILE) $(CCFLAGS) -shared -Wl,-soname=ciel-scc.so -o libciel-scc.so $(LIBCIELOBJS)

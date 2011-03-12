@@ -78,6 +78,7 @@ class Worker(plugins.SimplePlugin):
         self.execution_features = ExecutionFeatures()
         #self.task_executor = TaskExecutorPlugin(bus, self, self.master_proxy, self.execution_features, 1)
         #self.task_executor.subscribe()
+        self.role = options.role;
         self.multiworker = MultiWorker(ciel.engine, self, options.num_threads)
         self.multiworker.subscribe()
         self.process_pool = ProcessPool(bus, self)
@@ -94,7 +95,6 @@ class Worker(plugins.SimplePlugin):
         self.cherrypy_conf = {}
 
         cherrypy.config.update({"server.thread_pool" : 20})
-
 
         
         if options.staticbase is not None:

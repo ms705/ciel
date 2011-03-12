@@ -69,7 +69,6 @@ void sock_send(int remote_id, char *data, size_t len) {
 
     struct sockaddr_un saun;
     register int slen;
-    FILE *sockfd;	// socket FD
     int s;
 
     sock_init_client(&s);
@@ -85,8 +84,6 @@ void sock_send(int remote_id, char *data, size_t len) {
     	perror("failed to connect to socket");
     	exit(1);
     }
-
-    //sockfd = fdopen(sockid, "r");
 
     send(s, data, len, 0);
 
