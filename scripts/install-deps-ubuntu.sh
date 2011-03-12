@@ -7,13 +7,13 @@ PACKAGES="python python-ply python-httplib2 python-simplejson python-cherrypy3 p
 JDK="openjdk-6-jre"
 
 # shut up dpkg
-export DEBIAN_FRONTEND="noninteractive"
+#export DEBIAN_FRONTEND="noninteractive"
 
 # pre-accept Java license agreement :)
 echo sun-java6-jre shared/accepted-sun-dlj-v1-1 boolean true | debconf-set-selections
 
-apt-get -qq -y install $PACKAGES 1>&2 2>/dev/null
-apt-get -qq -y install $JDK 1>&2 2>/dev/null
+apt-get -y install $PACKAGES
+apt-get -y install $JDK
 
 # Because the Debian defaults assume we actually want this thing as our default server...
 

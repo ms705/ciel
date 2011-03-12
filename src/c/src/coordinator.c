@@ -19,9 +19,11 @@
 #ifdef RCCE
 
 iRCCE_WAIT_LIST general_waitlist;
+uint8_t waitlist_initialized;
 
 iRCCE_RECV_REQUEST *recv_requests;
 iRCCE_SEND_REQUEST *send_requests;
+
 
 #else
 
@@ -48,6 +50,7 @@ void coord_init(int argc, char **argv) {
 	//RCCE_barrier(&RCCE_COMM_WORLD);
 
     iRCCE_init_wait_list(&general_waitlist);
+    waitlist_initialized = 0;
 	printf("waitlist init done\n");
 
 #else
@@ -83,7 +86,6 @@ message_t coord_read(void) {
 #ifdef RCCE
 
     iRCCE_RECV_REQUEST* finisher_request;
-    int i;
 
     // XXX hardcoded remote rank
     /*if (RECV(buf, sizeof(buf), 1) != iRCCE_SUCCESS) {
@@ -92,10 +94,12 @@ message_t coord_read(void) {
 
     recv_requests = (iRCCE_RECV_REQUEST*)malloc(num_cores*sizeof(iRCCE_RECV_REQUEST));
 
-    for (i=1; i < num_cores; i++) {
-    	iRCCE_irecv((char *)&msg_size, sizeof(uint32_t), i, &recv_requests[i]);
-    	iRCCE_add_to_wait_list(&general_waitlist, NULL, &recv_requests[i]);
-    	printf("non-blocking recv from core %d initiated\n", i);
+    if (!waitlist_initialized) {
+		for (i=1; i < num_cores; i++) {
+			iRCCE_irecv((char *)&msg_size, sizeof(uint32_t), i, &recv_requests[i]);
+			iRCCE_add_to_wait_list(&general_waitlist, NULL, &recv_requests[i]);
+			printf("WL_INIT non-blocking recv from core %d initiated\n", i);
+		}
     }
 
     // Use iRCCE_wait_any() function:
@@ -109,6 +113,11 @@ message_t coord_read(void) {
 
     msg.source = finisher_request->source;
     msg.msg_body = buf;
+
+    // Finally make a new non-blocking request to replace the one we've just completed
+	iRCCE_irecv((char *)&msg_size, sizeof(uint32_t), i, &recv_requests[finisher_request->source]);
+	iRCCE_add_to_wait_list(&general_waitlist, NULL, &recv_requests[finisher_request->source]);
+	printf("REPLACE non-blocking recv from core %d initiated\n", finisher_request->source);
 
     free(recv_requests);
 
@@ -146,6 +155,8 @@ void coord_send(message_t msg) {
 	uint32_t len = msg.length;
 
 #ifdef RCCE
+
+	printf("coordinator sending message of len %d to core %d: %s\n", len, msg.dest, msg.msg_body);
 
 	// Send length of message first so that the other end knows what buffer size to allocate
 	SEND_B((char *)&len, sizeof(uint32_t), msg.dest);

@@ -58,6 +58,11 @@ do
       shift 2
     ;;
 
+    --scc)
+      SCCMODE="-scc"
+      shift 1
+    ;;
+
     -h|*)
       echo "usage: sw-kill-cluster [-f cluster-file|(-i|-k) key|-u swuser|-v]"
       echo "-f: the file listing the machines in the cluster, one per line."
@@ -86,9 +91,9 @@ do
     # into line-delimited pgrps. Then use pkill to zap anything sharing a group with any of them with signal 9.
     # This handles both daemonised and non-daemonised cases, in which the relevant group is and isn't respectively the group of the root Python process.
     if [[ $VERBOSE -eq 1 ]]; then
-	ssh -o StrictHostKeyChecking=no -f -i $KEY $SWUSER@$myLine $SWROOT/scripts/ciel-killall.sh
+	ssh -o StrictHostKeyChecking=no -f -i $KEY $SWUSER@$myLine $SWROOT/scripts/ciel-killall${SCCMODE}.sh
     else
-	ssh -o StrictHostKeyChecking=no -f -i $KEY $SWUSER@$myLine $SWROOT/scripts/ciel-killall.sh 1>&2 2>/dev/null
+	ssh -o StrictHostKeyChecking=no -f -i $KEY $SWUSER@$myLine $SWROOT/scripts/ciel-killall${SCCMODE}.sh 1>&2 2>/dev/null
     fi
     echo $myLine
     I=`expr $I + 1`

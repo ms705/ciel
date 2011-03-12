@@ -1,6 +1,7 @@
 #!/bin/sh
 BASE=$(dirname $(readlink -f $0))/..
 export PYTHONPATH=$PYTHONPATH:$BASE/src/python
+export PATH=$PATH:/opt/python/local/bin
 PYTHON=${PYTHON:-python}
 
 REL_BLOCK_LOCATION=${REL_BLOCK_LOCATION:-"store/"}
