@@ -5,11 +5,11 @@ IRCCEROOT=$(EXTERNAL)/iRCCE
 #SYMBOLSPATH=$(RCCEROOT)/common/symbols.in
 #include $(SYMBOLSPATH)
 
-ENABLE_RCCE = 1
+ENABLE_RCCE = 0
 
 ARCHIVE := $(RCCEROOT)/bin/SCC_LINUX/libRCCE_bigflags_nongory_nopwrmgmt.a
 
-CCOMPILE := icc
+CCOMPILE := gcc
 CCFLAGS := -O3
 INCLUDES := -I$(RCCEROOT)/include -I$(IRCCEROOT)/include
 
