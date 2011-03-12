@@ -45,7 +45,7 @@ class SCCTaskRunner:
 
 
 class MESSAGE(Structure):
-    _fields_ = [("source", c_int), ("length", c_int), ("msg_body", c_char_p)]
+    _fields_ = [("source", c_uint), ("length", c_uint), ("msg_body", c_char_p)]
 
 
 def redirect_stdout():
@@ -107,9 +107,10 @@ def scc_coordinator_main(options, args):
     
     mp = MESSAGE
     coord_read = lib.coord_read
-    coord_read.restype = mp 
+    coord_read.restype = mp
     while True:
         # At the coordinator, we keep waiting for messages and return once we have received one
         msg = coord_read()
-        print "message from core %d: %s (length %d)" % (msg.source, string_at(msg.msg_body), msg.length) 
+        #print "message from core %d: %s (length %d)" % (msg.source, string_at(msg.msg_body), msg.length) 
+        print "message from core %d" % (msg.source)
     
