@@ -26,7 +26,7 @@ iRCCE_SEND_REQUEST *send_requests;
 
 
 int s; 			// socket descriptor
-FILE *sockfd;	// socket FD
+uint8_t me = 1;
 
 
 void tr_init(int argc, char **argv) {
@@ -42,27 +42,16 @@ void tr_init(int argc, char **argv) {
 
 #else
 
-    struct sockaddr_un saun;
-    register int len;
+	//uint8_t me = atoi(argv[51]);
 
-    // Get a streaming UNIX domain socket
-    if ((s = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
-    	perror("socket creation error");
-    	exit(1);
-    }
+	printf("me is %d\n", me);
 
-    // Create the address to connect to
-    saun.sun_family = AF_UNIX;
-    strcpy(saun.sun_path, SOCK_ADDR);
+	sock_set_id(me);
 
-    len = sizeof(saun.sun_family) + strlen(saun.sun_path);
-
-    if (connect(s, &saun, len) < 0) {
-    	perror("failed to connect to socket");
-    	exit(1);
-    }
-
-    sockfd = fdopen(s, "r");
+	if(sock_init_server(&s, TRUE) > 1) {
+		perror("Failed to set up coordinator socket, exiting");
+		exit(1);
+	}
 
     printf("task runner sockets set up\n");
 
@@ -79,17 +68,61 @@ void tr_send(void) {
 
 	sprintf(c, "Hello world!\n");
 
-	SEND((char *)&len, len, s);
-	SEND_B(c, len, s);
+	printf("sending message length\n");
+	SEND((char *)&len, len, COORDINATOR_CORE);
+
+	printf("sending actual message\n");
+	SEND_B(c, len, COORDINATOR_CORE);
 
 }
 
 
-// send_message()
 
-// wait_for_receive() ?
+message_t tr_read(void) {
 
-// start_exec()
+    char *buf;
+    int n_recv, msg_size;
+    //message_t *msg = (message_t *)malloc(sizeof(message_t));
+    message_t msg;
+
+    msg.dest = COORDINATOR_CORE;
+
+#ifdef RCCE
+
+    // Block waiting for a length to be received
+   	iRCCE_recv((char *)&msg_size, sizeof(uint32_t), COORDINATOR_CORE);  // XXX source hard-coded to coordinator
+
+   	// Now actually receive the message
+	buf = (char *)malloc(msg_size*sizeof(char));
+	iRCCE_recv(buf, msg_size, COORDINATOR_CORE); // XXX source hard-coded to coordinator
+
+    msg.source = COORDINATOR_CORE;  // XXX source hard-coded to coordinator
+    msg.msg_body = buf;
+
+#else
+    n_recv = RECV((char *)&msg_size, sizeof(uint32_t), s);
+    assert(n_recv == sizeof(uint32_t));
+
+    //printf("message size %d returned\n", msg_size);
+
+	buf = (char *)malloc(msg_size*sizeof(char));
+    n_recv = RECV(buf, msg_size, s);
+
+    //printf("got message\n", msg_size);
+
+    /*if (n_recv > 0)
+    	printf("%s\n", buf);*/
+
+    msg.source = COORDINATOR_CORE;  // XXX source hard-coded to coordinator
+    msg.msg_body = buf;
+
+#endif
+
+    msg.length = msg_size;
+
+    return msg;
+
+}
 
 
 void tr_hello(void) {
