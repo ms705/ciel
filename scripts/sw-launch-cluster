@@ -181,9 +181,9 @@ do
 
 	echo "... as a worker for $MASTER, port $WORKER_PORT"
 	if [[ $VERBOSE -eq 1 ]]; then
-	    ssh -o StrictHostKeyChecking=no -f -i $KEY $SWUSER@$myLine "WORKER_PORT=${WORKER_PORT} MASTER_HOST='http://$MASTER:${MASTER_PORT}' REL_BLOCK_LOCATION=$STORENAME nohup $CORE_PIN_CMD $SWROOT/scripts/run_scc_taskrunner.sh 2>&1 | tee $SWROOT/logs/$LOGNAME.log"
+	    ssh -o StrictHostKeyChecking=no -f -i $KEY $SWUSER@$myLine "WORKER_PORT=${WORKER_PORT} MASTER_HOST='http://$MASTER:${MASTER_PORT}' REL_BLOCK_LOCATION=$STORENAME nohup $CORE_PIN_CMD $SWROOT/scripts/run_worker.sh 2>&1 | tee $SWROOT/logs/$LOGNAME.log"
 	else
-	    ssh -o StrictHostKeyChecking=no -f -i $KEY $SWUSER@$myLine "WORKER_PORT=${WORKER_PORT} MASTER_HOST='http://$MASTER:${MASTER_PORT}' REL_BLOCK_LOCATION=$STORENAME $CORE_PIN_CMD $SWROOT/scripts/run_scc_taskrunner.sh -D -o ${SWROOT}/logs/$LOGNAME.log"
+	    ssh -o StrictHostKeyChecking=no -f -i $KEY $SWUSER@$myLine "WORKER_PORT=${WORKER_PORT} MASTER_HOST='http://$MASTER:${MASTER_PORT}' REL_BLOCK_LOCATION=$STORENAME $CORE_PIN_CMD $SWROOT/scripts/run_worker.sh -D -o ${SWROOT}/logs/$LOGNAME.log"
 	fi
     fi
     I=`expr $I + 1`
