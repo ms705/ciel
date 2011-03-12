@@ -108,6 +108,8 @@ message_t coord_read(void) {
     msg.source = finisher_request->source;
     msg.msg_body = buf;
 
+    free(recv_requests);
+
 #else
     n_recv = RECV((char *)&msg_size, sizeof(uint32_t), s);
     assert(n_recv == sizeof(uint32_t));
