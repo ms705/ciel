@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <stdint.h>
+#include <assert.h>
 
 #include "coordinator.h"
 
@@ -24,6 +25,7 @@ uint8_t waitlist_initialized;
 iRCCE_RECV_REQUEST *recv_requests;
 iRCCE_SEND_REQUEST *send_requests;
 
+extern iRCCE_RECV_REQUEST** iRCCE_irecv_queue;
 
 #else
 
@@ -73,10 +75,13 @@ void coord_init(int argc, char **argv) {
 }
 
 
+uint8_t last_finisher;
+
 message_t coord_read(void) {
 
     char *buf;
-    int n_recv, msg_size;
+    int n_recv; 
+    static uint32_t msg_size;
     //message_t *msg = (message_t *)malloc(sizeof(message_t));
     message_t msg;
     uint8_t i;
@@ -92,16 +97,22 @@ message_t coord_read(void) {
     	while (iRCCE_isend_test(recv_requests, NULL) != iRCCE_SUCCESS) {}
     }*/
 
-    recv_requests = (iRCCE_RECV_REQUEST*)malloc(num_cores*sizeof(iRCCE_RECV_REQUEST));
-
     if (!waitlist_initialized) {
+    	recv_requests = (iRCCE_RECV_REQUEST*)malloc(num_cores*sizeof(iRCCE_RECV_REQUEST));
+
 		for (i=1; i < num_cores; i++) {
-			iRCCE_irecv((char *)&msg_size, sizeof(uint32_t), i, &recv_requests[i]);
+			int temp = iRCCE_irecv((char *)&msg_size, sizeof(uint32_t), i, &recv_requests[i]);
 			iRCCE_add_to_wait_list(&general_waitlist, NULL, &recv_requests[i]);
-			printf("WL_INIT non-blocking recv from core %d initiated\n", i);
+			printf("WL_INIT non-blocking recv from core %d initiated, returned %d\n", i, temp);
 		}
+	waitlist_initialized = 1;
+    } else {
+	int temp = iRCCE_irecv((char *)&msg_size, sizeof(uint32_t), last_finisher, &recv_requests[last_finisher]);
+	iRCCE_add_to_wait_list(&general_waitlist, NULL, &recv_requests[last_finisher]);
+	printf("WL_REPLACE non-blocking recv from core %d initiated, returned %d\n", last_finisher, temp);
     }
 
+	msg_size = 0;
     // Use iRCCE_wait_any() function:
 	iRCCE_wait_any(&general_waitlist, NULL, &finisher_request);
 
@@ -113,13 +124,13 @@ message_t coord_read(void) {
 
     msg.source = finisher_request->source;
     msg.msg_body = buf;
+    last_finisher = msg.source;
 
     // Finally make a new non-blocking request to replace the one we've just completed
-	iRCCE_irecv((char *)&msg_size, sizeof(uint32_t), i, &recv_requests[finisher_request->source]);
-	iRCCE_add_to_wait_list(&general_waitlist, NULL, &recv_requests[finisher_request->source]);
-	printf("REPLACE non-blocking recv from core %d initiated\n", finisher_request->source);
-
-    free(recv_requests);
+	//printf("%p\n", iRCCE_irecv_queue);
+	//iRCCE_irecv((char *)&msg_size, sizeof(uint32_t), i, &recv_requests[finisher_request->source]);
+	//iRCCE_add_to_wait_list(&general_waitlist, NULL, &recv_requests[finisher_request->source]);
+	//printf("REPLACE non-blocking recv from core %d initiated\n", finisher_request->source);
 
 #else
     n_recv = RECV((char *)&msg_size, sizeof(uint32_t), s);
