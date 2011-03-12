@@ -68,10 +68,10 @@ void tr_send(void) {
 
 	sprintf(c, "Hello world!\n");
 
-	printf("sending message length\n");
+	printf("sending message length (%d)\n", len);
 	SEND((char *)&len, len, COORDINATOR_CORE);
 
-	printf("sending actual message\n");
+	printf("sending actual message (%s)\n", c);
 	SEND_B(c, len, COORDINATOR_CORE);
 
 }
