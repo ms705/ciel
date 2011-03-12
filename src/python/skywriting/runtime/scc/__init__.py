@@ -125,5 +125,7 @@ def scc_coordinator_main(options, args):
         #coord_send(testmsg)
         # At the coordinator, we keep waiting for messages and return once we have received one
         msg = coord_read()
-        print "message from core %d: %s (length %d)" % (msg.source, string_at(msg.msg_body), msg.length) 
+        print "message from core %d: %s (length %d)" % (msg.source, string_at(msg.msg_body), msg.length)
+        if msg.msg_body == "IDLE":
+            coord_send(testmsg) 
     
