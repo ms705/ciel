@@ -12,6 +12,7 @@ import logging
 import os, sys
 
 from ctypes import *
+from skywriting.runtime.scc.messages import *
 
 
 class SCCTaskRunner:
@@ -44,13 +45,6 @@ class SCCTaskRunner:
         task.taskset.dec_runnable_count()
 
 
-class MESSAGE(Structure):
-    _fields_ = [("source", c_uint),
-                ("dest", c_uint), 
-                ("length", c_uint), 
-                ("msg_body", c_char_p)]
-
-
 def redirect_stdout():
     print "Redirecting stdout"
     sys.stdout.flush() # <--- important when redirecting to files
@@ -73,22 +67,32 @@ def scc_taskrunner_main(options, args):
     lib.tr_hello()
     #redirect_stdout()
     
+    me = 1
+    coordinator = 0
+    
     numcores = 48
     corelist = []
     for i in range(numcores):
         corelist.append(str(i))
-    argc = c_int(numcores + 3)
-    targv = c_char_p * (numcores + 3)
+    corelist.append(me)
+    
+    argc = c_int(numcores + 4)
+    targv = c_char_p * (numcores + 4)
     argv = targv("libciel-scc", str(numcores), "0.533", *corelist)
     lib.tr_init(argc, argv)
     
     tr_read = lib.tr_read
     tr_read.restype = MESSAGE
+    
+    # Send an IDLE message to start off
+    idlemsg = IdleMessage(me, coordinator).toStruct()
+    lib.tr_send(idlemsg)
+    
     while True:
         msg = tr_read()
         print "message from coordinator (%d): %s (length %d)" % (msg.source, string_at(msg.msg_body), msg.length) 
         # task stuff
-        lib.tr_send()
+        #lib.tr_send()
         
     
     
@@ -118,7 +122,7 @@ def scc_coordinator_main(options, args):
     coord_send = lib.coord_send
     testmsg = MESSAGE(0, 1, 32, "Hello from the coordinator!")
     while True:
-        coord_send(testmsg)
+        #coord_send(testmsg)
         # At the coordinator, we keep waiting for messages and return once we have received one
         msg = coord_read()
         print "message from core %d: %s (length %d)" % (msg.source, string_at(msg.msg_body), msg.length) 

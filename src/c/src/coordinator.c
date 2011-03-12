@@ -77,7 +77,7 @@ message_t coord_read(void) {
     //message_t *msg = (message_t *)malloc(sizeof(message_t));
     message_t msg;
 
-    msg.dest = 0;
+    msg.dest = COORDINATOR_CORE;
 
 #ifdef RCCE
 
@@ -112,17 +112,20 @@ message_t coord_read(void) {
     n_recv = RECV((char *)&msg_size, sizeof(uint32_t), s);
     assert(n_recv == sizeof(uint32_t));
 
-    //printf("message size %d returned\n", msg_size);
+    printf("message size %d returned\n", msg_size);
 
-	buf = (char *)malloc(msg_size*sizeof(char));
+	buf = (char *)malloc((msg_size+1)*sizeof(char));
     n_recv = RECV(buf, msg_size, s);
+
+    // Need to explicitly add null termination?
+    //buf[msg_size] = '\0';
 
     //printf("got message\n", msg_size);
 
-    /*if (n_recv > 0)
-    	printf("%s\n", buf);*/
+    if (n_recv > 0)
+    	printf("%s\n", buf);
 
-    msg.source = 0; // XXX need to fix this
+    msg.source = COORDINATOR_CORE; // XXX need to fix this
     msg.msg_body = buf;
 
 #endif
