@@ -103,6 +103,7 @@ message_t coord_read(void) {
 
     msg.source = finisher_request->source;
     msg.msg_body = buf;
+    msg.length = msg_size;
 
     return msg;
 
@@ -114,6 +115,7 @@ message_t coord_read(void) {
 
     msg.source = 0;
     msg.msg_body = buf;
+    msg.length = sizeof(buf);
 
     return msg;
 
