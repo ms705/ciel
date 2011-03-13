@@ -137,13 +137,13 @@ message_t coord_read(void) {
 	buf = (char *)malloc((msg_size+1)*sizeof(char));
 	n_recv = RECV(buf, msg_size, s);
 
-	//printf("got message\n", msg_size);
+	/*if (n_recv > 0)
+		printf("%s\n", buf);*/
 
-	if (n_recv > 0)
-		printf("%s\n", buf);
-
-	msg.source = COORDINATOR_CORE; // XXX need to fix this
+	msg.source = 1; // XXX need to fix this
 	msg.msg_body = buf;
+
+	printf("got message from %d\n", msg.source);
 
 #endif
 
@@ -158,8 +158,6 @@ void coord_send(message_t msg) {
 
 	uint32_t len = msg.length;
 
-#ifdef RCCE
-
 	printf("coordinator sending message of len %d to core %d: %s\n", len, msg.dest, msg.msg_body);
 
 	// Send length of message first so that the other end knows what buffer size to allocate
@@ -167,16 +165,6 @@ void coord_send(message_t msg) {
 
 	// Now send the actual message body
 	SEND_B(msg.msg_body, len, msg.dest);
-
-#else
-
-	// Send length of message first so that the other end knows what buffer size to allocate
-	SEND_B((char *)&len, sizeof(uint32_t), msg.dest);
-
-	// Now send the actual message body
-	SEND_B(msg.msg_body, len, msg.dest);
-
-#endif
 
 }
 

@@ -80,6 +80,8 @@ void sock_send(int remote_id, char *data, size_t len) {
 
     slen = sizeof(saun.sun_family) + strlen(saun.sun_path);
 
+    printf("sending to socket at address %s\n", remote_addr);
+
     if (connect(s, (const struct sockaddr *)&saun, slen) < 0) {
     	perror("failed to connect to socket");
     	exit(1);

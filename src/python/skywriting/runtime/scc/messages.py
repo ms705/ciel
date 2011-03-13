@@ -5,6 +5,8 @@ Created on 12 Mar 2011
 '''
 
 from ctypes import *
+from skywriting.runtime.references import SWReferenceJSONEncoder
+import simplejson
 
 class MESSAGE(Structure):
     _fields_ = [("source", c_uint),
@@ -39,8 +41,8 @@ class TaskDispatchMessage(AbstractMessage):
 
 class TaskCompletedMessage(AbstractMessage):
     
-    def __init__(self, src, dest, tid):
+    def __init__(self, src, dest, success, spawned_tasks, published_refs):
         self.source = src
         self.dest = dest
-        self.body = "DONE with task: " + tid  # XXX: need some magic parsing here
+        self.body = simplejson.dumps((success, spawned_tasks, published_refs), cls=SWReferenceJSONEncoder)
     
