@@ -18,7 +18,7 @@ import threading
 import simplejson
 
 from ctypes import *
-from skywriting.runtime.scc.messages import *, TaskCompletedMessage
+from skywriting.runtime.scc.messages import *
 
 
 class SCCCoordinator:
