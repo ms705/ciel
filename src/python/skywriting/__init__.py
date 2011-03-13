@@ -20,6 +20,8 @@ import socket
 import cherrypy
 import sys
 import os
+import logging
+import ciel
 
 def set_port(port):
     cherrypy.config.update({'server.socket_port': port})
@@ -29,7 +31,7 @@ def set_config(filename):
 
 def main(default_role=None):
 
-    print "Ciel started with args", sys.argv
+    ciel.log("CIEL started with args: %s" % " ".join(sys.argv), "STARTUP", logging.INFO)
 
     cherrypy.config.update({'server.socket_host': '0.0.0.0'})
     
@@ -53,6 +55,7 @@ def main(default_role=None):
     parser.add_option("-D", "--daemonise", action="store_true", dest="daemonise", help="Run as a daemon", default=False)
     parser.add_option("-o", "--logfile", action="store", dest="logfile", help="If daemonised, log to FILE", default="/dev/null", metavar="FILE")
     parser.add_option("-T", "--process-tag", action="store", dest="tag", help="Ignored, for tagging the process", metavar="STRING")
+    parser.add_option("-C", "--scheduling-classes", action="store", dest="scheduling_classes", help="List of semicolon-delimited scheduling classes", metavar="CLASS,N;CLASS,N;...", default=None)
     (options, args) = parser.parse_args()
 
     if options.daemonise:
@@ -68,12 +71,9 @@ def main(default_role=None):
         from skywriting.runtime.worker import worker_main
         if not cherrypy.config.get('server.socket_port'):
             parser.print_help()
-            print >> sys.stderr, "Must specify port for worker with --port\n"
+            ciel.log("Must specify port for worker with --port", "STARTUP", logging.ERROR) 
             sys.exit(1)
         worker_main(options)
-    elif options.role == 'interactive':
-        from skywriting.runtime.interactive import interactive_main
-        interactive_main(options)
     elif options.role == 'allinone':
         from skywriting.runtime.allinone import allinone_main
         allinone_main(options, args)

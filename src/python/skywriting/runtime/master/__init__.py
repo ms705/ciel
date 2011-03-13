@@ -18,15 +18,14 @@ from skywriting.runtime.master.deferred_work import DeferredWorkPlugin
 from skywriting.runtime.master.hot_standby import BackupSender, \
     MasterRecoveryMonitor
 from skywriting.runtime.master.job_pool import JobPool
-from skywriting.runtime.master.lazy_scheduler import LazyScheduler
 from skywriting.runtime.master.master_view import MasterRoot
 from skywriting.runtime.master.recovery import RecoveryManager, \
     TaskFailureInvestigator
 from skywriting.runtime.master.worker_pool import WorkerPool
 from skywriting.runtime.task_executor import TaskExecutorPlugin
+from skywriting.runtime.block_store import post_string
 import cherrypy
 import ciel
-import httplib2
 import logging
 import os
 import simplejson
@@ -36,23 +35,21 @@ import subprocess
 import tempfile
 import urllib
 import urllib2
-from skywriting.runtime.master.pushy_scheduler import PushyScheduler
 
 def master_main(options):
 
     deferred_worker = DeferredWorkPlugin(ciel.engine)
     deferred_worker.subscribe()
 
-    worker_pool = WorkerPool(ciel.engine, deferred_worker)
+    worker_pool = WorkerPool(ciel.engine, deferred_worker, None)
     worker_pool.subscribe()
-
-    scheduler = PushyScheduler(ciel.engine, worker_pool)
-    scheduler.subscribe()
 
     task_failure_investigator = TaskFailureInvestigator(worker_pool, deferred_worker)
     
-    job_pool = JobPool(ciel.engine, options.journaldir, scheduler, task_failure_investigator)
+    job_pool = JobPool(ciel.engine, options.journaldir, None, task_failure_investigator, deferred_worker, worker_pool)
     job_pool.subscribe()
+    
+    worker_pool.job_pool = job_pool
 
     backup_sender = BackupSender(cherrypy.engine)
     backup_sender.subscribe()
@@ -60,7 +57,7 @@ def master_main(options):
     local_hostname = socket.getfqdn()
     local_port = cherrypy.config.get('server.socket_port')
     master_netloc = '%s:%d' % (local_hostname, local_port)
-    print 'Local port is', local_port
+    ciel.log('Local port is %d' % local_port, 'STARTUP', logging.INFO)
     
     if options.blockstore is None:
         static_content_root = tempfile.mkdtemp(prefix=os.getenv('TEMP', default='/tmp/sw-files-'))
@@ -120,8 +117,7 @@ def master_main(options):
         with (open(options.workerlist, "r")) as f:
             for worker_url in f.readlines():
                 try:
-                    http = httplib2.Http()
-                    http.request(urllib2.urlparse.urljoin(worker_url, 'control/master/'), "POST", master_details_as_json)
+                    post_string(urllib2.urlparse.urljoin(worker_url, 'control/master/'), master_details_as_json)
                     # Worker will be created by a callback.
                 except:
                     ciel.log.error("Error adding worker: %s" % (worker_url, ), "WORKER", logging.WARNING)

@@ -36,7 +36,7 @@ class ControlRoot:
     def __init__(self, worker_pool, block_store, job_pool, backup_sender, monitor):
         self.worker = WorkersRoot(worker_pool, backup_sender, monitor)
         self.job = JobRoot(job_pool, backup_sender, monitor)
-        self.task = MasterTaskRoot(job_pool, backup_sender)
+        self.task = MasterTaskRoot(job_pool, worker_pool, backup_sender)
         self.data = DataRoot(block_store, backup_sender)
         self.gethostname = HostnameRoot()
         self.shutdown = ShutdownRoot(worker_pool)
@@ -124,9 +124,9 @@ class WorkersRoot:
                 raise HTTPError(404)
         if cherrypy.request.method == 'POST':
             if action == 'ping':
-                ciel.engine.publish('worker_ping', worker)
+                self.worker_pool.worker_ping(worker)
             elif action == 'stopping':
-                ciel.engine.publish('worker_failed', worker)
+                self.worker_pool.worker_failed(worker)
             else:
                 raise HTTPError(404)
         else:
@@ -145,11 +145,17 @@ class JobRoot:
         if cherrypy.request.method == 'POST':
             # 1. Read task descriptor from request.
             request_body = cherrypy.request.body.read()
-            task_descriptor = simplejson.loads(request_body, 
+            payload = simplejson.loads(request_body, 
                                                object_hook=json_decode_object_hook)
 
+            task_descriptor = payload['root_task']
+            try:
+                job_options = payload['job_options']
+            except KeyError:
+                job_options = {}
+
             # 2. Add to job pool (synchronously).
-            job = self.job_pool.create_job_for_task(task_descriptor)
+            job = self.job_pool.create_job_for_task(task_descriptor, job_options)
             
             # 2bis. Send to backup master.
             self.backup_sender.add_job(job.id, request_body)
@@ -214,8 +220,9 @@ class JobRoot:
         
 class MasterTaskRoot:
     
-    def __init__(self, job_pool, backup_sender):
+    def __init__(self, job_pool, worker_pool, backup_sender):
         self.job_pool = job_pool
+        self.worker_pool = worker_pool
         self.backup_sender = backup_sender
        
     @cherrypy.expose 
@@ -247,8 +254,10 @@ class MasterTaskRoot:
 
         if action == 'report':
             # Multi-spawn-and-commit
-            report = simplejson.loads(cherrypy.request.body.read(), object_hook=json_decode_object_hook)
-            job.report_tasks(report, task)
+            report_payload = simplejson.loads(cherrypy.request.body.read(), object_hook=json_decode_object_hook)
+            worker = self.worker_pool.get_worker_by_id(report_payload['worker'])
+            report = report_payload['report']
+            job.report_tasks(report, task, worker)
             return
 
         elif action == 'failed':
@@ -259,7 +268,6 @@ class MasterTaskRoot:
         elif action == 'publish':
             request_body = cherrypy.request.body.read()
             refs = simplejson.loads(request_body, object_hook=json_decode_object_hook)
-            print refs
             
             tx = TaskGraphUpdate()
             for ref in refs:
