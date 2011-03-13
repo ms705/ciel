@@ -106,6 +106,11 @@ class SCCCoordinator:
                     self.qm.notify()
                 
 
+class FakeWorker:
+    
+    def __init__(self, blockstore):
+        self.block_store = blockstore
+        
 
 
 def redirect_stdout():
@@ -137,6 +142,7 @@ def scc_taskrunner_main(options, args):
     #execution_features.check_executors()
     
     block_store = BlockStore(ciel.engine, None, None, "/tmp")
+    fakeworker = FakeWorker(block_store) 
     
     
     numcores = 48
@@ -162,8 +168,8 @@ def scc_taskrunner_main(options, args):
         print "message from coordinator (%d): %s (length %d)" % (msg.source, string_at(msg.msg_body), msg.length) 
         # task stuff
         td = simplejson.loads(msg.msg_body, object_hook=json_decode_object_hook)
-        taskset = TaskSetExecutionRecord(td, block_store, None, execution_features, None) 
-        record = TaskExecutionRecord(td, taskset, execution_features, block_store, None, None)
+        taskset = TaskSetExecutionRecord(td, block_store, None, execution_features, fakeworker)
+        record = TaskExecutionRecord(td, taskset, execution_features, block_store, None, fakeworker)
         record.run()
         msg = TaskCompletedMessage(me, coordinator, td["task_id"]).toStruct()
         lib.tr_send(msg)
