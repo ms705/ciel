@@ -11,6 +11,7 @@ from skywriting.runtime.local_task_graph import LocalTaskGraph, LocalJobOutput
 from skywriting.runtime.task_executor import TaskExecutionRecord,\
     TaskSetExecutionRecord
 from skywriting.runtime.executors import ExecutionFeatures
+from shared.references import SWDataValue
 import ciel
 import logging
 import os, sys
@@ -34,6 +35,13 @@ class SCCCoordinator:
     def handle_task(self, task, coreid):
         
         next_td = task.as_descriptor()
+        
+        refs_as_strings = self.qm.job_manager.worker.block_store.retrieve_strings_for_refs(next_td["inputs"])
+        
+        refs_as_datavalues = [SWDataValue(ref.id, self.qm.job_manager.worker.block_store.encode_datavalue(val)) for ref, val in zip(next_td["inputs"], refs_as_strings)]
+        
+        next_td["inputs"] = refs_as_datavalues
+        
         td_string = simplejson.dumps(next_td, cls=SWReferenceJSONEncoder)
         
         coord_send = self.lib.coord_send
