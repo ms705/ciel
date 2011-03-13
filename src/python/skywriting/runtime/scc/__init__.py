@@ -12,6 +12,7 @@ from skywriting.runtime.task_executor import TaskExecutionRecord,\
     TaskSetExecutionRecord
 from skywriting.runtime.executors import ExecutionFeatures
 from shared.references import SWDataValue
+import datetime
 import ciel
 import logging
 import os, sys
@@ -51,22 +52,17 @@ class SCCCoordinator:
         next_td["dependencies"] = self.convert_refs(next_td["dependencies"])
         next_td["task_private"] = self.convert_refs([next_td["task_private"]])[0]
         
+        task_record = task.taskset.build_task_record(next_td)
+        task_record.task_set.job.task_started()
+        task_record.start_time = datetime.datetime.now()
+        
         td_string = simplejson.dumps(next_td, cls=SWReferenceJSONEncoder)
         
         coord_send = self.lib.coord_send
         testmsg = MESSAGE(0, coreid, len(td_string), td_string)
         coord_send(testmsg)
         
-        self.current_tasks[coreid] = task
-        #next_td["inputs"] = [task.taskset.retrieve_ref(ref) for ref in next_td["dependencies"]]
-        #task_record = task.taskset.build_task_record(next_td)
-        #try:
-        #    task_record.run()
-        #except:
-        #    ciel.log.error('Error during executor task execution', 'MWPOOL', logging.ERROR, True)
-        #if task_record.success:
-        #    task.taskset.task_graph.spawn_and_publish(task_record.spawned_tasks, task_record.published_refs, next_td)
-        #task.taskset.dec_runnable_count()
+        self.current_tasks[coreid] = (task, task_record)
 
 
     def thread_main(self):
@@ -105,7 +101,19 @@ class SCCCoordinator:
                 # We are receiving the results of a task execution
                 (success, spawned_tasks, published_refs) = simplejson.loads(msg.msg_body, object_hook=json_decode_object_hook)
                 if success:
-                    task = self.current_tasks[msg.source]
+                    record = self.current_tasks[msg.source][1]
+                    task = self.current_tasks[msg.source][0]
+                    
+                    record.success = True
+                    record.finish_time = datetime.datetime.now()
+                    execution_time = record.finish_time - record.start_time
+                    execution_secs = execution_time.seconds + execution_time.microseconds / 1000000.0
+                    record.task_set.job.task_finished(task, execution_secs)
+                    
+                    record.spawned_tasks = spawned_tasks
+                    
+                    record.published_refs = published_refs
+                    
                     if not task:
                         ciel.log.error('Tried to handle completed task from core %d, but found no record of it in current_tasks' % (msg.source), 'SCC', logging.ERROR, True)
                     task.taskset.task_graph.spawn_and_publish(spawned_tasks, published_refs, task.as_descriptor())
@@ -126,7 +134,7 @@ class SCCCoordinator:
                 self.handle_task(task, coreid)
             except Exception:
                 ciel.log.error('Uncaught error handling task in pool: %s' % (self.name), 'SCC', logging.ERROR, True)
-            self.qm.notify()
+            self.qm.notify(self.name)
 
 class FakeWorker:
     
