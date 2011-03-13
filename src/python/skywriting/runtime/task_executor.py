@@ -124,6 +124,12 @@ class TaskSetExecutionRecord:
         with self._lock:
             if self.current_td["task_id"] == task_id:
                 self.current_task.executor.abort()
+        
+    def inc_runnable_count(self):
+        pass
+    
+    def dec_runnable_count(self):
+        pass
 
 class TaskExecutionRecord:
 
