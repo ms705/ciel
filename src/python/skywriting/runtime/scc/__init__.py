@@ -120,7 +120,7 @@ def scc_taskrunner_main(options, args):
     coordinator = 0
     
     execution_features = ExecutionFeatures()
-    execution_features.check_executors()
+    #execution_features.check_executors()
     
     block_store = BlockStore(ciel.engine, None, None, "/tmp")
     

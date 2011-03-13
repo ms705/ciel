@@ -79,7 +79,7 @@ class TaskSetExecutionRecord:
         self.job_output = LocalJobOutput(self.initial_td["expected_outputs"])
         for ref in self.initial_td["expected_outputs"]:
             self.task_graph.subscribe(ref, self.job_output)
-        self.task_graph.spawn_and_publish([self.initial_td], self.initial_td["inputs"])
+        self.task_graph.spawn_and_publish([self.initial_td], self.initial_td["inputs"], taskset=self)
 
     def run(self):
         ciel.log.error("Running taskset starting at %s" % self.initial_td["task_id"], "TASKEXEC", logging.INFO)
