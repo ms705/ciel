@@ -6,9 +6,11 @@ Created on 9 Mar 2011
 from skywriting.runtime.exceptions import ReferenceUnavailableException,\
     AbortedException
 from skywriting.runtime.block_store import json_decode_object_hook,\
-    SWReferenceJSONEncoder
+    SWReferenceJSONEncoder, BlockStore
 from skywriting.runtime.local_task_graph import LocalTaskGraph, LocalJobOutput
-from skywriting.runtime.task_executor import TaskExecutionRecord
+from skywriting.runtime.task_executor import TaskExecutionRecord,\
+    TaskSetExecutionRecord
+from skywriting.runtime.executors import ExecutionFeatures
 import ciel
 import logging
 import os, sys
@@ -16,7 +18,7 @@ import threading
 import simplejson
 
 from ctypes import *
-from skywriting.runtime.scc.messages import *
+from skywriting.runtime.scc.messages import *, TaskCompletedMessage
 
 
 class SCCCoordinator:
@@ -117,6 +119,12 @@ def scc_taskrunner_main(options, args):
     me = 1
     coordinator = 0
     
+    execution_features = ExecutionFeatures()
+    execution_features.check_executors()
+    
+    block_store = BlockStore(ciel.engine, None, None, "/tmp")
+    
+    
     numcores = 48
     corelist = []
     for i in range(numcores):
@@ -140,8 +148,11 @@ def scc_taskrunner_main(options, args):
         print "message from coordinator (%d): %s (length %d)" % (msg.source, string_at(msg.msg_body), msg.length) 
         # task stuff
         td = simplejson.loads(msg.msg_body, object_hook=json_decode_object_hook)
-        print simplejson.dumps(td, sort_keys=True, indent=4)
-        #lib.tr_send()
+        taskset = TaskSetExecutionRecord(td, block_store, None, execution_features, None) 
+        record = TaskExecutionRecord(td, taskset, execution_features, block_store, None, None)
+        record.run()
+        msg = TaskCompletedMessage(me, coordinator, td["task_id"]).toStruct()
+        lib.tr_send(msg)
         
     
     

@@ -39,8 +39,8 @@ class TaskDispatchMessage(AbstractMessage):
 
 class TaskCompletedMessage(AbstractMessage):
     
-    def __init__(self, src, dest, td):
+    def __init__(self, src, dest, tid):
         self.source = src
         self.dest = dest
-        self.body = td  # XXX: need some magic parsing here
-        
+        self.body = "DONE with task: " + tid  # XXX: need some magic parsing here
+    
