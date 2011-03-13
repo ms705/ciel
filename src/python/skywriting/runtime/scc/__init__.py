@@ -139,8 +139,8 @@ def scc_taskrunner_main(options, args):
         msg = tr_read()
         print "message from coordinator (%d): %s (length %d)" % (msg.source, string_at(msg.msg_body), msg.length) 
         # task stuff
-        td = simplejson.loads(msg.msg_body, cls=SWReferenceJSONEncoder)
-        simplejson.dumps(td, sort_keys=True, indent=4)
+        td = simplejson.loads(msg.msg_body, object_hook=json_decode_object_hook)
+        print simplejson.dumps(td, sort_keys=True, indent=4)
         #lib.tr_send()
         
     
