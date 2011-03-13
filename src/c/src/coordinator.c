@@ -134,7 +134,7 @@ message_t coord_read(void) {
 
 	printf("message size %d returned\n", msg_size);
 
-	buf = (char *)malloc((msg_size+1)*sizeof(char));
+	buf = (char *)malloc((msg_size)*sizeof(char));
 	n_recv = RECV(buf, msg_size, s);
 
 	/*if (n_recv > 0)
@@ -158,7 +158,8 @@ void coord_send(message_t msg) {
 
 	uint32_t len = msg.length;
 
-	printf("coordinator sending message of len %d to core %d: %s\n", len, msg.dest, msg.msg_body);
+	//printf("coordinator sending message of len %d to core %d: %s\n", len, msg.dest, msg.msg_body);
+	printf("coordinator sending message of len %d to core %d\n", len, msg.dest);
 
 	// Send length of message first so that the other end knows what buffer size to allocate
 	SEND_B((char *)&len, sizeof(uint32_t), msg.dest);

@@ -18,7 +18,10 @@ class MESSAGE(Structure):
 class AbstractMessage:
     
     def toStruct(self):
-        return MESSAGE(self.source, self.dest, len(self.body)+1, self.body)
+        #carr = create_string_buffer(self.body)
+        #carr_p = pointer(carr)
+        ptr = c_char_p(self.body)
+        return MESSAGE(self.source, self.dest, len(self.body), ptr)
 
 
 

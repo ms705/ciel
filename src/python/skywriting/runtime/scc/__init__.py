@@ -94,12 +94,13 @@ class SCCCoordinator:
             print "coordinator waiting for messages..."
             # At the coordinator, we keep waiting for messages and return once we have received one
             msg = coord_read()
-            print "message from core %d: %s (length %d)" % (msg.source, string_at(msg.msg_body), msg.length)
+            print "message from core %d of (length %d)" % (msg.source, msg.length)
+            #print "message from core %d: %s (length %d)" % (msg.source, string_at(msg.msg_body, msg.length), msg.length)
             if msg.msg_body == "IDLE":
                 self.send_next_task_to_core(msg.source)
             else:
                 # We are receiving the results of a task execution
-                (success, spawned_tasks, published_refs) = simplejson.loads(msg.msg_body, object_hook=json_decode_object_hook)
+                (success, spawned_tasks, published_refs) = simplejson.loads(string_at(msg.msg_body, msg.length), object_hook=json_decode_object_hook)
                 if success:
                     record = self.current_tasks[msg.source][1]
                     task = self.current_tasks[msg.source][0]
@@ -210,9 +211,9 @@ class SCCTaskRunner:
         
         while True:
             msg = tr_read()
-            print "message from coordinator (%d): %s (length %d)" % (msg.source, string_at(msg.msg_body), msg.length) 
+            print "message from coordinator (%d) of length %d)" % (msg.source, msg.length) 
             # Load TD from JSON
-            td = simplejson.loads(msg.msg_body, object_hook=json_decode_object_hook)
+            td = simplejson.loads(string_at(msg.msg_body, msg.length), object_hook=json_decode_object_hook)
             
             # Make a TaskSetExecutionRecord and a TaskExecutionRecord with most of the parameters stubbed out
             taskset = TaskSetExecutionRecord(td, self.block_store, None, execution_features, self.worker)
