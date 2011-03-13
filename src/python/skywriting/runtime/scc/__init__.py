@@ -32,15 +32,21 @@ class SCCCoordinator:
     def get_next_task(self, name):
         pass
     
+    def convert_refs(self, refs):
+        
+        refs_as_strings = self.qm.job_manager.worker.block_store.retrieve_strings_for_refs(refs)
+        
+        refs_as_datavalues = [SWDataValue(ref.id, self.qm.job_manager.worker.block_store.encode_datavalue(val)) for ref, val in zip(refs, refs_as_strings)]
+        
+        return refs_as_datavalues
+    
     def handle_task(self, task, coreid):
         
         next_td = task.as_descriptor()
         
-        refs_as_strings = self.qm.job_manager.worker.block_store.retrieve_strings_for_refs(next_td["inputs"])
-        
-        refs_as_datavalues = [SWDataValue(ref.id, self.qm.job_manager.worker.block_store.encode_datavalue(val)) for ref, val in zip(next_td["inputs"], refs_as_strings)]
-        
-        next_td["inputs"] = refs_as_datavalues
+        next_td["inputs"] = self.convert_refs(next_td["inputs"])
+        next_td["dependencies"] = self.convert_refs(next_td["dependencies"])
+        next_td["task_private"] = self.convert_refs([next_td["task_private"]])[0]
         
         td_string = simplejson.dumps(next_td, cls=SWReferenceJSONEncoder)
         
