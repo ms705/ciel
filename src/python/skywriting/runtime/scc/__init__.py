@@ -33,8 +33,8 @@ class SCCCoordinator:
         for i in range(num_cores):
             self.current_tasks.append(None)
     
-    def get_next_task(self, name):
-        pass
+    #def get_next_task(self, name):
+    #    pass
     
     def convert_refs(self, refs):
         
@@ -96,10 +96,14 @@ class SCCCoordinator:
             msg = coord_read()
             print "message from core %d of (length %d)" % (msg.source, msg.length)
             #print "message from core %d: %s (length %d)" % (msg.source, string_at(msg.msg_body, msg.length), msg.length)
-            if msg.msg_body == "IDLE":
-                self.send_next_task_to_core(msg.source)
+            if string_at(msg.msg_body, msg.length) == "IDLE":
+                #self.send_next_task_to_core(msg.source)
+		print "got idle message from core %d" % msg.source
+                self.thread = threading.Thread(target=self.send_next_task_to_core, args=[msg.source])
+                self.thread.start()
             else:
                 # We are receiving the results of a task execution
+		print "got task completion message from core %d" % msg.source
                 (success, spawned_tasks, published_refs) = simplejson.loads(string_at(msg.msg_body, msg.length), object_hook=json_decode_object_hook)
                 if success:
                     record = self.current_tasks[msg.source][1]
@@ -119,15 +123,21 @@ class SCCCoordinator:
                         ciel.log.error('Tried to handle completed task from core %d, but found no record of it in current_tasks' % (msg.source), 'SCC', logging.ERROR, True)
                     task.taskset.task_graph.spawn_and_publish(spawned_tasks, published_refs, task.as_descriptor())
                     task.taskset.dec_runnable_count()
-                    self.send_next_task_to_core(msg.source)
+                    #self.send_next_task_to_core(msg.source)
+                    self.thread = threading.Thread(target=self.send_next_task_to_core, args=[msg.source])
+                    self.thread.start()
+
                 else:
                     # report an error
                     ciel.log.error('Task %s on core %d did not complete successfully' % (task['task_id'], msg.source), 'SCC', logging.ERROR, True)
                     pass
+	    print "got to the end of the loop"
                 
                 
     def send_next_task_to_core(self, coreid):
         task = self.qm.get_next_task(self.name)
+	#self.lib.coord_notify();
+	
         if task is None:
             return
         else:
@@ -136,6 +146,8 @@ class SCCCoordinator:
             except Exception:
                 ciel.log.error('Uncaught error handling task in pool: %s' % (self.name), 'SCC', logging.ERROR, True)
             self.qm.notify(self.name)
+
+	self.thread.join()
 
 class FakeWorker:
     
@@ -211,7 +223,7 @@ class SCCTaskRunner:
         
         while True:
             msg = tr_read()
-            print "message from coordinator (%d) of length %d)" % (msg.source, msg.length) 
+            print "message from coordinator (%d) of length %d: %s" % (msg.source, msg.length, string_at(msg.msg_body, msg.length)) 
             # Load TD from JSON
             td = simplejson.loads(string_at(msg.msg_body, msg.length), object_hook=json_decode_object_hook)
             
@@ -223,7 +235,9 @@ class SCCTaskRunner:
             try:
                 record.run()
             except:
-                ciel.log.error('Error during executor task execution', 'MWPOOL', logging.ERROR, True)
+                ciel.log.error('Error during executor task execution', 'SCC', logging.ERROR, True)
+            
+            print "task completed"
             
             # We're now done and can send our outputs back
             #record.task_set.job.task_finished()
@@ -233,6 +247,7 @@ class SCCTaskRunner:
 
             msg = TaskCompletedMessage(me, coordinator, record.success, record.spawned_tasks, record.published_refs).toStruct()
             lib.tr_send(msg)
+            print "sent task completion message, end of loop"
             
         
         

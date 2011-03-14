@@ -14,6 +14,6 @@ void coord_init(int argc, char **argv);
 message_t coord_read(void);
 void coord_quit(void);
 void coord_hello(void);
-
+void coord_notify(void);
 
 #endif /* COORDINATOR_H */
