@@ -170,8 +170,10 @@ void coord_send(message_t msg) {
 	// Send length of message first so that the other end knows what buffer size to allocate
 	SEND_B((char *)&len, sizeof(uint32_t), msg.dest);
 
+#ifndef RCCE
 	// Send the sending "core ID"
 	SEND_B((char *)&(msg.source), sizeof(uint32_t), msg.dest);
+#endif
 
 	// Now send the actual message body
 	SEND_B(msg.msg_body, len, msg.dest);

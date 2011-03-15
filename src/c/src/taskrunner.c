@@ -66,8 +66,10 @@ void tr_send(message_t msg) {
 	//printf("sending message length (%d)\n", msg.length);
 	SEND((char *)&msg.length, sizeof(uint32_t), msg.dest);
 
+#ifndef RCCE
 	// Send the sending "core ID"
 	SEND_B((char *)&(msg.source), sizeof(uint32_t), msg.dest);
+#endif
 
 	//printf("sending actual message (%s)\n", msg.msg_body);
 	SEND_B(msg.msg_body, msg.length, msg.dest);
