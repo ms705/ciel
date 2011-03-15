@@ -145,7 +145,10 @@ class SCCCoordinator:
                         ciel.log.error('Tried to handle completed task from core %d, but found no record of it in current_tasks' % (msg.source), 'SCC', logging.ERROR, True)
                     task.taskset.task_graph.spawn_and_publish(spawned_tasks, published_refs, task.as_descriptor())
                     task.taskset.dec_runnable_count()
-                    #self.send_next_task_to_core(msg.source)
+                    
+                    print "got to the end of task, thread joining"
+                    self.threads[msg.source].join()
+                    
                     self.threads[msg.source] = threading.Thread(target=self.send_next_task_to_core, args=[msg.source])
                     self.threads[msg.source].start()
 
@@ -154,8 +157,6 @@ class SCCCoordinator:
                     ciel.log.error('Task %s on core %d did not complete successfully' % (task['task_id'], msg.source), 'SCC', logging.ERROR, True)
                     pass
                 
-                print "got to the end of task, thread joining"
-                self.threads[msg.source].join()
                 
             else:
                 ciel.log.error('Received unrecognized message type %s from core %d' % (bodyjson["type"], bodyjson["src"]), 'SCC', logging.ERROR, True)
@@ -259,7 +260,7 @@ class SCCTaskRunner:
         
         while True:
             msg = tr_read()
-            print "message from coordinator (%d) of length %d: %s" % (msg.source, msg.length, string_at(msg.msg_body, msg.length)) 
+            #print "message from coordinator (%d) of length %d: %s" % (msg.source, msg.length, string_at(msg.msg_body, msg.length)) 
             # Load TD from JSON
             bodyObj = simplejson.loads(string_at(msg.msg_body, msg.length), object_hook=json_decode_object_hook)
             print "message from coordinator (%d) of length %d, type %s" % (msg.source, msg.length, bodyObj['type']) 
