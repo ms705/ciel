@@ -284,11 +284,13 @@ class SCCTaskRunner:
             
             print "task completed"
             
+            _=[self.block_store.is_ref_local(x) for x in record.published_refs]
+            
             # We're now done and can send our outputs back
             #record.task_set.job.task_finished()
             if record.success:
                 record.published_refs = self.convert_refs(record.published_refs)
-                pass
+                #pass
                 #task.taskset.task_graph.spawn_and_publish(task_record.spawned_tasks, task_record.published_refs, next_td)
 
             msg = TaskCompletedMessage(me, coordinator, record.success, record.spawned_tasks, record.published_refs).toStruct()

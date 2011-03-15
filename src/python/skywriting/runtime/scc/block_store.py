@@ -27,6 +27,8 @@ class FakeBlockStore(BlockStore):
         me = 1
         coordinator = 0
         
+        print "actually doing a reference fetch from coordinator for ref %s" % ref
+        
         # ask for the reference
         refmsg = GetReferenceMessage(me, coordinator, ref).toStruct()
         self.lib.tr_send(refmsg)
