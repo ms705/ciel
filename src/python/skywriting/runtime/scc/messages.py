@@ -30,7 +30,7 @@ class IdleMessage(AbstractMessage):
     def __init__(self, src, dest):
         self.source = src
         self.dest = dest
-        self.body = "IDLE"
+        self.body = simplejson.dumps({'type': 'IDLE', 'source': str(src), 'ref': None, 'body': None},  cls=SWReferenceJSONEncoder)
     
     
     
@@ -39,7 +39,8 @@ class TaskDispatchMessage(AbstractMessage):
     def __init__(self, src, dest, td):
         self.source = src
         self.dest = dest
-        self.body = td  # XXX: need some magic parsing here
+        self.body = simplejson.dumps({'type': 'SPAWN', 'source': str(src), 'ref': None, 'body': td},  cls=SWReferenceJSONEncoder)
+    
     
 
 class TaskCompletedMessage(AbstractMessage):
@@ -47,5 +48,15 @@ class TaskCompletedMessage(AbstractMessage):
     def __init__(self, src, dest, success, spawned_tasks, published_refs):
         self.source = src
         self.dest = dest
-        self.body = simplejson.dumps((success, spawned_tasks, published_refs), cls=SWReferenceJSONEncoder)
+        data = (success, spawned_tasks, published_refs)
+        self.body = simplejson.dumps({'type': 'DONE', 'source': str(src), 'ref': None, 'body': data}, cls=SWReferenceJSONEncoder)
+    
+    
+    
+class GetReferenceMessage(AbstractMessage):
+    
+    def __init__(self, src, dest, ref):
+        self.source = src
+        self.dest = dest
+        self.body = simplejson.dumps({'type': 'GET', 'source' : src, 'ref': ref, 'body': None},  cls=SWReferenceJSONEncoder)
     

@@ -1069,12 +1069,23 @@ class BlockStore(plugins.SimplePlugin):
 
     def retrieve_strings_for_refs(self, refs):
 
-        strs = []
-        files = self.retrieve_filenames_for_refs(refs)
-        for fname in files:
-            with open(fname, "r") as fp:
-                strs.append(fp.read())
-        return strs
+        solutions = dict()
+        unsolved_refs = []
+        for ref in refs:
+            if isinstance(ref, SWDataValue):
+                solutions[ref.id] = self.decode_datavalue(ref)
+            else:
+                unsolved_refs.append(ref)
+
+        files = self.retrieve_filenames_for_refs(unsolved_refs)
+        
+        for (ref, filename) in zip(unsolved_refs, files):
+            with open(filename, "r") as fp:
+                solutions[ref.id] = fp.read()
+
+        return [solutions[ref.id] for ref in refs]
+
+        
 
     def retrieve_string_for_ref(self, ref):
         
@@ -1085,10 +1096,13 @@ class BlockStore(plugins.SimplePlugin):
         solutions = dict()
         unsolved_refs = []
         for (ref, decoder) in ref_and_decoders:
-            try:
-                solutions[ref.id] = self.object_cache[(ref.id, decoder)]
-            except:
-                unsolved_refs.append(ref)
+            if isinstance(ref, SWDataValue):
+                solutions[ref.id] = self.decoders[decoder](StringIO(self.decode_datavalue(ref)))
+            else:
+                try:
+                    solutions[ref.id] = self.object_cache[(ref.id, decoder)]
+                except:
+                    unsolved_refs.append(ref)
 
         strings = self.retrieve_strings_for_refs(unsolved_refs)
         str_of_ref = dict([(ref.id, string) for (string, ref) in zip(strings, unsolved_refs)])

@@ -16,82 +16,82 @@ void sock_set_id(uint8_t id) {
 
 int sock_init_server(int *sock, uint8_t blocking) {
 
-    register int len;
-    struct sockaddr_un saun;
+	register int len;
+	struct sockaddr_un saun;
 
 
-    // Get a streaming UNIX domain socket
-    if ((*sock = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
-    	perror("socket creation error");
-    	return 1;
-    }
+	// Get a streaming UNIX domain socket
+	if ((*sock = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
+		perror("socket creation error");
+		return 1;
+	}
 
-    // Create the address to connect to
-    saun.sun_family = AF_UNIX;
-    strcpy(saun.sun_path, my_addr);
+	// Create the address to connect to
+	saun.sun_family = AF_UNIX;
+	strcpy(saun.sun_path, my_addr);
 
-    // delete the socket file if it still exists
-    unlink(my_addr);
+	// delete the socket file if it still exists
+	unlink(my_addr);
 
-    len = sizeof(saun.sun_family) + strlen(saun.sun_path);
+	len = sizeof(saun.sun_family) + strlen(saun.sun_path);
 
-    if (bind(*sock, (const struct sockaddr *)&saun, len) < 0) {
-    	perror("failed to bind to socket");
-    	return 1;
-    }
+	if (bind(*sock, (const struct sockaddr *)&saun, len) < 0) {
+		perror("failed to bind to socket");
+		return 1;
+	}
 
-    if (listen(*sock, 5) < 0) {
-    	perror("failed to listen on socket");
-    	return 1;
-    }
+	if (listen(*sock, 5) < 0) {
+		perror("failed to listen on socket");
+		return 1;
+	}
 
-    // Make the socket non-blocking
-    if (!blocking) sock_set_nonblock(*sock);
+	// Make the socket non-blocking
+	if (!blocking) sock_set_nonblock(*sock);
 
-    return 0;
+	return 0;
 }
 
 
 int sock_init_client(int *sockid) {
 
-    // Get a streaming UNIX domain socket
-    if ((*sockid = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
-    	perror("socket creation error");
-    	return -1;
-    }
+	// Get a streaming UNIX domain socket
+	if ((*sockid = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
+		perror("socket creation error");
+		return -1;
+	}
 
-    return 0;
+	return 0;
 
 }
 
 
 void sock_send(int remote_id, char *data, size_t len) {
 
-    struct sockaddr_un saun;
-    register int slen;
-    int s;
+	struct sockaddr_un saun;
+	register int slen;
+	int s;
 
-    sock_init_client(&s);
+	sock_init_client(&s);
 
-    // Create the address to connect to
-    saun.sun_family = AF_UNIX;
-    char *remote_addr = get_remote_addr(remote_id);
-    strcpy(saun.sun_path, remote_addr);
+	// Create the address to connect to
+	saun.sun_family = AF_UNIX;
+	char *remote_addr = get_remote_addr(remote_id);
+	strcpy(saun.sun_path, remote_addr);
 
-    slen = sizeof(saun.sun_family) + strlen(saun.sun_path);
+	slen = sizeof(saun.sun_family) + strlen(saun.sun_path);
 
-    printf("sending to socket at address %s\n", remote_addr);
+	printf("sending to socket at address %s\n", remote_addr);
 
-    if (connect(s, (const struct sockaddr *)&saun, slen) < 0) {
-    	perror("failed to connect to socket");
-    	exit(1);
-    }
+	if (connect(s, (const struct sockaddr *)&saun, slen) < 0) {
+		perror("failed to connect to socket");
+		exit(1);
+	}
 
-    send(s, data, len, 0);
+	send(s, data, len, 0);
 
-    close(s);
+	close(s);
 
-    free(remote_addr);
+	free(remote_addr);
 
 }
 
@@ -99,15 +99,15 @@ int32_t sock_recv(int sockfd, char *buf, unsigned int len) {
 
 	struct sockaddr_un from_saun;
 	socklen_t from_len;
-    int32_t rval;
-    int32_t n_read = 0;
+	int32_t rval;
+	int32_t n_read = 0;
 
-    int msgsock = accept(sockfd, (const struct sockaddr *)&from_saun, &from_len);
-    //printf("accepted from %s\n", from_saun.sun_path);
-    if (msgsock == -1) {
-            perror("accept failed, or non-blocking mode");
-			return -1;
-    } else {
+	int msgsock = accept(sockfd, (const struct sockaddr *)&from_saun, &from_len);
+	//printf("accepted from %s\n", from_saun.sun_path);
+	if (msgsock == -1) {
+		perror("accept failed, or non-blocking mode");
+		return -1;
+	} else {
 		memset(buf, 0, len);
 		while (n_read < len) {
 			if ((rval = read(msgsock, buf,  len)) < 0)
@@ -119,12 +119,12 @@ int32_t sock_recv(int sockfd, char *buf, unsigned int len) {
 				printf("Ending connection\n");
 		else
 				printf("-->%s\n", buf);*/
-    }
-    close(msgsock);
+	}
+	close(msgsock);
 
-    //printf("read %d bytes, expected %d\n", n_read, len);
+	//printf("read %d bytes, expected %d\n", n_read, len);
 
-    return n_read;
+	return n_read;
 }
 
 

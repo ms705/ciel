@@ -25,8 +25,8 @@ iRCCE_SEND_REQUEST *send_requests;
 #endif
 
 
-int s; 			// socket descriptor
-uint8_t me = 1;
+int s; 				// socket descriptor
+uint8_t me = 1;		// core id
 
 
 void tr_init(int argc, char **argv) {
@@ -42,9 +42,9 @@ void tr_init(int argc, char **argv) {
 
 #else
 
-	//uint8_t me = atoi(argv[51]);
+	me = atoi(argv[argc-1]);
 
-	printf("me is %d\n", me);
+	printf("my core ID is %d\n", me);
 
 	sock_set_id(me);
 
@@ -53,17 +53,21 @@ void tr_init(int argc, char **argv) {
 		exit(1);
 	}
 
-    printf("task runner sockets set up\n");
+	printf("task runner sockets set up\n");
 
 #endif
 
 }
 
 
+
 void tr_send(message_t msg) {
 
 	//printf("sending message length (%d)\n", msg.length);
 	SEND((char *)&msg.length, sizeof(uint32_t), msg.dest);
+
+	// Send the sending "core ID"
+	SEND_B((char *)&(msg.source), sizeof(uint32_t), msg.dest);
 
 	//printf("sending actual message (%s)\n", msg.msg_body);
 	SEND_B(msg.msg_body, msg.length, msg.dest);
@@ -94,10 +98,16 @@ message_t tr_read(void) {
 	msg.msg_body = buf;
 
 #else
+
+	uint32_t core_id;
+
 	n_recv = RECV((char *)&msg_size, sizeof(uint32_t), s);
 	assert(n_recv == sizeof(uint32_t));
 
 	//printf("message size %d returned\n", msg_size);
+
+	n_recv = RECV((char *)&core_id, sizeof(uint32_t), s);
+	assert(n_recv == sizeof(uint32_t));
 
 	buf = (char *)malloc((msg_size)*sizeof(char));
 	n_recv = RECV(buf, msg_size, s);

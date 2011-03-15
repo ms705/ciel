@@ -13,8 +13,6 @@
 #include <sys/types.h>
 #include <stdint.h>
 #include <assert.h>
-#include <pthread.h>
-#include <time.h>
 
 #include "coordinator.h"
 
@@ -38,9 +36,6 @@ int s;		// socket descriptor
 uint8_t num_cores;
 uint8_t last_finisher;
 
-pthread_mutex_t mutex;
-pthread_cond_t condvar;
-
 void coord_init(int argc, char **argv) {
 
 	num_cores = atoi(argv[1]);
@@ -60,9 +55,6 @@ void coord_init(int argc, char **argv) {
 	iRCCE_init_wait_list(&general_waitlist);
 	waitlist_initialized = 0;
 	printf("waitlist init done\n");
-
-	pthread_mutex_init(&mutex, NULL);
-	pthread_cond_init(&condvar, NULL);
 
 #else
 
@@ -91,23 +83,18 @@ message_t coord_read(void) {
 	static uint32_t msg_size;
 	//message_t *msg = (message_t *)malloc(sizeof(message_t));
 	message_t msg;
-	uint8_t i;
-	volatile uint8_t interrupted = 0;
 
 	msg.dest = COORDINATOR_CORE;
 
 #ifdef RCCE
 
+	uint8_t i;
 	iRCCE_RECV_REQUEST* finisher_request;
-	struct timespec ts;
-	struct timeval tp;
 
 	// XXX hardcoded remote rank
 	/*if (RECV(buf, sizeof(buf), 1) != iRCCE_SUCCESS) {
 		while (iRCCE_isend_test(recv_requests, NULL) != iRCCE_SUCCESS) {}
 	}*/
-
-	//pthread_mutex_lock(&mutex);
 
 	if (!waitlist_initialized) {
 		// Initialize the wait list and populate it with a non-blocking read request for every core
@@ -129,20 +116,6 @@ message_t coord_read(void) {
 	// Use iRCCE_wait_any() function:
 	iRCCE_wait_any(&general_waitlist, NULL, &finisher_request);
 
-	/*while (!interrupted && (iRCCE_test_any(&general_waitlist, NULL, &finisher_request) != iRCCE_SUCCESS)) {
-		gettimeofday(&tp, NULL);
-
-		// Convert from timeval to timespec
-		ts.tv_sec  = tp.tv_sec;
-		ts.tv_nsec = tp.tv_usec * 1000;
-		ts.tv_sec += 2;
-
-		//printf("waiting for condvar\n");
-		//pthread_cond_timedwait(&condvar, &mutex, &ts);
-		//printf("after condvar wait\n");
-	}*/
-	//pthread_mutex_unlock(&mutex);
-
 	printf("got a message of length %d from core %d\n", msg_size, finisher_request->source);
 
 	// Now actually receive the message (in blocking mode)
@@ -155,10 +128,16 @@ message_t coord_read(void) {
 
 
 #else
+
+	uint32_t core_id;
+
 	n_recv = RECV((char *)&msg_size, sizeof(uint32_t), s);
 	assert(n_recv == sizeof(uint32_t));
 
 	printf("message size %d returned\n", msg_size);
+
+	n_recv = RECV((char *)&core_id, sizeof(uint32_t), s);
+	assert(n_recv == sizeof(uint32_t));
 
 	buf = (char *)malloc((msg_size)*sizeof(char));
 	n_recv = RECV(buf, msg_size, s);
@@ -166,7 +145,7 @@ message_t coord_read(void) {
 	/*if (n_recv > 0)
 		printf("%s\n", buf);*/
 
-	msg.source = 1; // XXX need to fix this
+	msg.source = core_id;
 	msg.msg_body = buf;
 
 	printf("got message from %d\n", msg.source);
@@ -180,18 +159,6 @@ message_t coord_read(void) {
 }
 
 
-void coord_notify(void) {
-
-#if 0
-	printf("coord_notify() called\n");
-	pthread_mutex_lock(&mutex);
-	printf("sending signal\n");
-	pthread_cond_signal(&condvar);
-	pthread_mutex_unlock(&mutex);
-#endif
-
-}
-
 
 void coord_send(message_t msg) {
 
@@ -202,6 +169,9 @@ void coord_send(message_t msg) {
 
 	// Send length of message first so that the other end knows what buffer size to allocate
 	SEND_B((char *)&len, sizeof(uint32_t), msg.dest);
+
+	// Send the sending "core ID"
+	SEND_B((char *)&(msg.source), sizeof(uint32_t), msg.dest);
 
 	// Now send the actual message body
 	SEND_B(msg.msg_body, len, msg.dest);
@@ -214,9 +184,6 @@ void coord_quit(void) {
 	printf("RCCE coordinator quitting\n");
 
 #ifdef RCCE
-	pthread_mutex_destroy(&mutex);
-	pthread_cond_destroy(&condvar);
-	//pthread_exit(NULL);
 #else
 	// close the socket
 	close(s);
