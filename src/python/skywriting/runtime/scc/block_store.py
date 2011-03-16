@@ -30,16 +30,18 @@ class FakeBlockStore(BlockStore):
         print "actually doing a reference fetch from coordinator for ref %s" % ref
         
         # ask for the reference
-        refmsg = GetReferenceMessage(me, coordinator, ref).toStruct()
+        refmsg = pointer(GetReferenceMessage(me, coordinator, ref).toStruct())
         self.lib.tr_send(refmsg)
         
         # wait to hear back
-        dv = self.lib.tr_read()
+        msg = self.lib.tr_read()
+        dv = msg.contents
         print "received data for reference %s (length %d): %s" % (ref, dv.length, string_at(dv.msg_body, dv.length)) 
         # Load TD from JSON
-        bodyObj = simplejson.loads(string_at(dv.msg_body, dv.length), object_hook=json_decode_object_hook)
+        #bodyObj = simplejson.loads(string_at(dv.msg_body, dv.length), object_hook=json_decode_object_hook)
         
-        return bodyObj['body']
+        #return bodyObj['body']
+        return dv.msg_body
     
     
     def retrieve_filenames_for_refs(self, refs):

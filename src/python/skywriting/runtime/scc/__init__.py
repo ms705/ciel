@@ -61,8 +61,8 @@ class SCCCoordinator:
         task_record.start_time = datetime.datetime.now()
         
         coord_send = self.lib.coord_send
-        testmsg = TaskDispatchMessage(0, coreid, next_td).toStruct()
-        coord_send(testmsg)
+        dispatchmsg = TaskDispatchMessage(0, coreid, next_td).toStruct()
+        coord_send(dispatchmsg)
         
         self.current_tasks[coreid] = (task, task_record)
 
