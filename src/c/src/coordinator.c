@@ -13,6 +13,7 @@
 #include <sys/types.h>
 #include <stdint.h>
 #include <assert.h>
+#include <sched.h>
 
 #include "coordinator.h"
 
@@ -76,25 +77,20 @@ void coord_init(int argc, char **argv) {
 }
 
 
-message_t coord_read(void) {
+message_t *coord_read(void) {
 
 	char *buf;
 	int n_recv;
 	static uint32_t msg_size;
-	//message_t *msg = (message_t *)malloc(sizeof(message_t));
-	message_t msg;
+	message_t *msg = (message_t *)malloc(sizeof(message_t));
+	//message_t msg;
 
-	msg.dest = COORDINATOR_CORE;
+	msg->dest = COORDINATOR_CORE;
 
 #ifdef RCCE
 
 	uint8_t i;
 	iRCCE_RECV_REQUEST* finisher_request;
-
-	// XXX hardcoded remote rank
-	/*if (RECV(buf, sizeof(buf), 1) != iRCCE_SUCCESS) {
-		while (iRCCE_isend_test(recv_requests, NULL) != iRCCE_SUCCESS) {}
-	}*/
 
 	if (!waitlist_initialized) {
 		// Initialize the wait list and populate it with a non-blocking read request for every core
@@ -114,18 +110,36 @@ message_t coord_read(void) {
 	}
 
 	// Use iRCCE_wait_any() function:
-	iRCCE_wait_any(&general_waitlist, NULL, &finisher_request);
+	//iRCCE_wait_any(&general_waitlist, NULL, &finisher_request);
 
-	printf("got a message of length %d from core %d\n", msg_size, finisher_request->source);
+	// Just wait for the first rank who gets the word
+        uint8_t done = 0;
+	int32_t test;
+	uint32_t srcid;
+        while(!done) {
+                for (i=1; i < 48; i++) {
+                        if (iRCCE_irecv_test(&recv_requests[i], &test) == iRCCE_SUCCESS) {
+                                done = 1;
+				srcid = i;
+                                break;
+                        }
+                }
+		sched_yield();
+        }
+
+
+	//printf("got a message of length %d from core %d\n", msg_size, finisher_request->source);
+	printf("got a message of length %d from core %d\n", msg_size, srcid);
 
 	// Now actually receive the message (in blocking mode)
 	buf = (char *)malloc(msg_size*sizeof(char));
-	iRCCE_recv(buf, msg_size, finisher_request->source);
+	//iRCCE_recv(buf, msg_size, finisher_request->source);
+	iRCCE_recv(buf, msg_size, srcid);
 
-	msg.source = finisher_request->source;
-	msg.msg_body = buf;
-	last_finisher = msg.source;
-
+	//msg->source = finisher_request->source;
+	msg->source = srcid;
+	msg->msg_body = buf;
+	last_finisher = msg->source;
 
 #else
 
@@ -145,14 +159,14 @@ message_t coord_read(void) {
 	/*if (n_recv > 0)
 		printf("%s\n", buf);*/
 
-	msg.source = core_id;
-	msg.msg_body = buf;
+	msg->source = core_id;
+	msg->msg_body = buf;
 
-	printf("got message from %d\n", msg.source);
+	printf("got message from %d\n", msg->source);
 
 #endif
 
-	msg.length = msg_size;
+	msg->length = msg_size;
 
 	return msg;
 
@@ -160,23 +174,23 @@ message_t coord_read(void) {
 
 
 
-void coord_send(message_t msg) {
+void coord_send(message_t *msg) {
 
-	uint32_t len = msg.length;
+	uint32_t len = msg->length;
 
-	//printf("coordinator sending message of len %d to core %d: %s\n", len, msg.dest, msg.msg_body);
-	printf("coordinator sending message of len %d to core %d\n", len, msg.dest);
+	//printf("coordinator sending message of len %d to core %d: %s\n", len, msg->dest, msg->msg_body);
+	printf("coordinator sending message of len %d to core %d\n", len, msg->dest);
 
 	// Send length of message first so that the other end knows what buffer size to allocate
-	SEND_B((char *)&len, sizeof(uint32_t), msg.dest);
+	SEND_B((char *)&len, sizeof(uint32_t), msg->dest);
 
 #ifndef RCCE
 	// Send the sending "core ID"
-	SEND_B((char *)&(msg.source), sizeof(uint32_t), msg.dest);
+	SEND_B((char *)&(msg->source), sizeof(uint32_t), msg->dest);
 #endif
 
 	// Now send the actual message body
-	SEND_B(msg.msg_body, len, msg.dest);
+	SEND_B(msg->msg_body, len, msg->dest);
 
 }
 
