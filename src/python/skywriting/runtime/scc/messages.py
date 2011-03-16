@@ -60,3 +60,10 @@ class GetReferenceMessage(AbstractMessage):
         self.dest = dest
         self.body = simplejson.dumps({'type': 'GET', 'source' : src, 'ref': ref, 'body': None},  cls=SWReferenceJSONEncoder)
     
+class PutReferenceMessage(AbstractMessage):
+    
+    def __init__(self, src, dest, ref, content):
+        self.source = src
+        self.dest = dest
+        self.body = content
+    

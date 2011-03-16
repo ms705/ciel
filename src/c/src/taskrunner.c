@@ -61,31 +61,31 @@ void tr_init(int argc, char **argv) {
 
 
 
-void tr_send(message_t msg) {
+void tr_send(message_t *msg) {
 
-	//printf("sending message length (%d)\n", msg.length);
-	SEND((char *)&msg.length, sizeof(uint32_t), msg.dest);
+	//printf("sending message length (%d)\n", msg->length);
+	SEND((char *)&msg->length, sizeof(uint32_t), msg->dest);
 
 #ifndef RCCE
 	// Send the sending "core ID"
-	SEND_B((char *)&(msg.source), sizeof(uint32_t), msg.dest);
+	SEND_B((char *)&(msg->source), sizeof(uint32_t), msg->dest);
 #endif
 
-	//printf("sending actual message (%s)\n", msg.msg_body);
-	SEND_B(msg.msg_body, msg.length, msg.dest);
+	//printf("sending actual message (%s)\n", msg->msg_body);
+	SEND_B(msg->msg_body, msg->length, msg->dest);
 
 }
 
 
 
-message_t tr_read(void) {
+message_t *tr_read(void) {
 
 	char *buf;
 	int n_recv, msg_size;
-	//message_t *msg = (message_t *)malloc(sizeof(message_t));
-	message_t msg;
+	message_t *msg = (message_t *)malloc(sizeof(message_t));
+	//message_t msg;
 
-	msg.dest = COORDINATOR_CORE;
+	msg->dest = COORDINATOR_CORE;
 
 #ifdef RCCE
 
@@ -96,8 +96,8 @@ message_t tr_read(void) {
 	buf = (char *)malloc(msg_size*sizeof(char));
 	iRCCE_recv(buf, msg_size, COORDINATOR_CORE); // XXX source hard-coded to coordinator
 
-	msg.source = COORDINATOR_CORE;  // XXX source hard-coded to coordinator
-	msg.msg_body = buf;
+	msg->source = COORDINATOR_CORE;  // XXX source hard-coded to coordinator
+	msg->msg_body = buf;
 
 #else
 
@@ -119,12 +119,12 @@ message_t tr_read(void) {
 	/*if (n_recv > 0)
 	printf("%s\n", buf);*/
 
-	msg.source = COORDINATOR_CORE;  // XXX source hard-coded to coordinator
-	msg.msg_body = buf;
+	msg->source = COORDINATOR_CORE;  // XXX source hard-coded to coordinator
+	msg->msg_body = buf;
 
 #endif
 
-	msg.length = msg_size;
+	msg->length = msg_size;
 
 	return msg;
 

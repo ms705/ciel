@@ -16,6 +16,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <arpa/inet.h>
 
 #define COORD_ADDR "libciel-scc-core0"
 

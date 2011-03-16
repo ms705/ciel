@@ -10,7 +10,7 @@ ENABLE_RCCE = 0
 ARCHIVE := $(RCCEROOT)/bin/SCC_LINUX/libRCCE_bigflags_nongory_nopwrmgmt.a
 
 CCOMPILE := gcc
-CCFLAGS := -O3
+CCFLAGS := -O3 -DSOCK_UNIX
 INCLUDES := -I$(RCCEROOT)/include -I$(IRCCEROOT)/include
 
 ifeq ($(ENABLE_RCCE),1)
