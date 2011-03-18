@@ -96,7 +96,7 @@ class GetReferenceMessage(AbstractMessage):
         self.source = src
         self.dest = dest
         #self.body = simplejson.dumps({'type': 'GET', 'source' : src, 'ref': ref, 'body': None},  cls=SWReferenceJSONEncoder)
-        data = str(ref)
+        data = simplejson.dumps(ref,  cls=SWReferenceJSONEncoder)
         self.body = create_string_buffer(1 + 4 + len(data))
         self.body[0] = str(self.GET_MESSAGE)
         self.body[1:5] = pack("I", len(data)) 

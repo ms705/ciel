@@ -136,10 +136,12 @@ class SCCCoordinator:
             
             elif msg_type == AbstractMessage.GET_MESSAGE:
                 # GET message: task runner is asking for a reference's data to be sent over, 
-                # so we respond with that in a PUT message 
-                ciel.log("Got reference fetch message from core %d for reference %s" % (msg.contents.source, body[1:]))
+                # so we respond with that in a PUT message
+                reflen = unpack("I", body[1:5])[0] 
+                ref = simplejson.loads(body[5:(reflen+5)], object_hook=json_decode_object_hook)
+                #ref = body[5:(reflen+5)]
+                ciel.log("Got reference fetch message from core %d for reference %s" % (msg.contents.source, ref))
                 
-                ref = simplejson.loads(body[1:], object_hook=json_decode_object_hook)
                 if not self.block_store.is_ref_local(ref):
                     ciel.log.error("Task runner %d asked for ref %s, which is not available locally", "SCC", logging.ERROR, False)
                 else:
@@ -148,8 +150,8 @@ class SCCCoordinator:
                     buf = ""
                     buf += open(fname, 'rb').read()
                     
-                    refmsg = pointer(PutReferenceMessage(0, msg.contents.source, ref, buf))
-                    ciel.log("Sending message to core %d:" % (msg.contents.source, refmsg))
+                    refmsg = pointer(PutReferenceMessage(0, msg.contents.source, ref, buf).toStruct())
+                    ciel.log("Sending message to core %d: %s" % (msg.contents.source, refmsg))
                     self.lib.coord_send(refmsg)
                 
             elif msg_type == AbstractMessage.PUT_MESSAGE:
@@ -275,14 +277,8 @@ class SCCTaskRunner:
     
     def __init__(self):
         
-        bsdir = tempfile.mkdtemp(prefix="scc-tr-tmp")
-        ciel.log("Task runner creating fake block store backing directory at %s" % bsdir, "SCC", logging.INFO)
-        
         libpath = os.getenv("LIBCIEL_PATH", "../src/c/src")
         self.lib = CDLL(libpath + "/libciel-scc.so")
-        
-        self.block_store = FakeBlockStore(ciel.engine, None, None, bsdir, self.lib)
-        self.worker = FakeWorker(self.block_store) 
         
     
     
@@ -307,11 +303,18 @@ class SCCTaskRunner:
         #redirect_stdout()
         
         if len(args) > 0:
-            me = int(args[0])
+            self.coreid = int(args[0])
         else:
-            me = 1
+            ciel.log("No core ID passed, assuming 1", "SCC", logging.WARN)
+            self.coreid = 1
         coordinator = 0
         
+        bsdir = tempfile.mkdtemp(prefix="scc-tr-tmp")
+        ciel.log("Task runner creating fake block store backing directory at %s" % bsdir, "SCC", logging.INFO)
+        
+        self.block_store = FakeBlockStore(ciel.engine, None, None, bsdir, self.lib, self.coreid)
+        self.worker = FakeWorker(self.block_store)
+         
         execution_features = ExecutionFeatures()
         #execution_features.check_executors()
         
@@ -320,7 +323,7 @@ class SCCTaskRunner:
         corelist = []
         for i in range(numcores):
             corelist.append(str(i))
-        corelist.append(str(me))
+        corelist.append(str(self.coreid))
         
         argc = c_int(numcores + 4)
         targv = c_char_p * (numcores + 4)
@@ -331,7 +334,7 @@ class SCCTaskRunner:
         tr_read.restype = POINTER(MESSAGE)
         
         # Send an IDLE message to start off
-        idlemsg = pointer(IdleMessage(me, coordinator).toStruct())
+        idlemsg = pointer(IdleMessage(self.coreid, coordinator).toStruct())
         lib.tr_send(idlemsg)
         
         while True:
@@ -383,10 +386,10 @@ class SCCTaskRunner:
                     buf = ""
                     buf += open(fname, 'rb').read()
                     
-                    refmsg = pointer(PutReferenceMessage(me, coordinator, ref, buf).toStruct())
+                    refmsg = pointer(PutReferenceMessage(self.coreid, coordinator, ref, buf).toStruct())
                     self.lib.coord_send(refmsg)
             
-            msg = pointer(TaskCompletedMessage(me, coordinator, record.success, record.spawned_tasks, record.published_refs).toStruct())
+            msg = pointer(TaskCompletedMessage(self.coreid, coordinator, record.success, record.spawned_tasks, record.published_refs).toStruct())
             lib.tr_send(msg)
             print "sent task completion message, end of loop"
             

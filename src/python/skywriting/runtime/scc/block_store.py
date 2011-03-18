@@ -10,6 +10,7 @@ import simplejson
 
 import ciel
 import logging, sys
+import struct
 from ctypes import *
 
 
@@ -17,14 +18,15 @@ from skywriting.runtime.block_store import BlockStore, json_decode_object_hook
 
 class FakeBlockStore(BlockStore):
     
-    def __init__(self, bus, hostname, port, base_dir, lib, ignore_blocks=False):
+    def __init__(self, bus, hostname, port, base_dir, lib, coreid, ignore_blocks=False):
         BlockStore.__init__(self, bus, hostname, port, base_dir, ignore_blocks)
         self.lib = lib
+        self.coreid = coreid
         
     
     def fetch_ref(self, ref):
         
-        me = 1
+        me = self.coreid
         coordinator = 0
         
         print "actually doing a reference fetch from coordinator for ref %s" % ref
@@ -35,13 +37,21 @@ class FakeBlockStore(BlockStore):
         
         # wait to hear back
         msg = self.lib.tr_read()
-        dv = msg.contents
-        print "received data for reference %s (length %d): %s" % (ref, dv.length, string_at(dv.msg_body, dv.length)) 
+        #print "received data for reference %s (length %d): %s" % (ref, dv.length, string_at(dv.msg_body, dv.length)) 
         # Load TD from JSON
         #bodyObj = simplejson.loads(string_at(dv.msg_body, dv.length), object_hook=json_decode_object_hook)
         
         #return bodyObj['body']
-        return dv.msg_body
+        data = msg.contents.msg_body
+        reflen = struct.unpack("I", data[1:5])[0]
+        
+        datalen = struct.unpack("I", data[(reflen+5):(reflen+9)])[0]
+        
+        print msg.contents.length
+        print reflen
+        print datalen
+        
+        return data[(reflen+9):(reflen+9+datalen)]
     
     
     def retrieve_filenames_for_refs(self, refs):
