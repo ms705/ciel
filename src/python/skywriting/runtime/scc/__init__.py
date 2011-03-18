@@ -369,8 +369,8 @@ class SCCTaskRunner:
             # We're now done and can send our outputs back
             #record.task_set.job.task_finished()
             if record.success:
-                record.published_refs = self.convert_refs(record.published_refs)
-                #pass
+                #record.published_refs = self.convert_refs(record.published_refs)
+                pass
                 #task.taskset.task_graph.spawn_and_publish(task_record.spawned_tasks, task_record.published_refs, next_td)
                 
             # send the data for the task's published references
