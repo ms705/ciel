@@ -20,12 +20,15 @@ import logging
 import os, sys
 import threading
 import simplejson
+import struct
 
 from ctypes import *
 from skywriting.runtime.scc.messages import *
 
 
 class SCCCoordinator:
+    
+    COORDINATOR_CORE_ID = 0
     
     def __init__(self, name, queue_manager, num_cores):
         self.name = name
@@ -39,25 +42,25 @@ class SCCCoordinator:
             
         self.block_store = self.qm.job_manager.worker.block_store
     
-    #def get_next_task(self, name):
-    #    pass
     
     def convert_refs(self, refs):
-
-	ciel.log("Started reference conversion for %d refs" % len(refs), "SCC", logging.INFO)
+        
+        ciel.log("Started reference conversion for %d refs" % len(refs), "SCC", logging.INFO)
         
         refs_as_strings = self.block_store.retrieve_strings_for_refs(refs)
         
         refs_as_datavalues = [SWDataValue(ref.id, self.block_store.encode_datavalue(val)) for ref, val in zip(refs, refs_as_strings)]
         
-	ciel.log("Finished reference conversion for %d refs" % len(refs), "SCC", logging.INFO)
-
+        ciel.log("Finished reference conversion for %d refs" % len(refs), "SCC", logging.INFO)
+        
         return refs_as_datavalues
+    
     
     def handle_task(self, task, coreid):
         
         next_td = task.as_descriptor()
         
+        # Converts inputs, dependencies and task_private to SWDataValues
         #next_td["inputs"] = self.convert_refs(next_td["inputs"])
         #next_td["dependencies"] = self.convert_refs(next_td["dependencies"])
         #next_td["task_private"] = self.convert_refs([next_td["task_private"]])[0]
@@ -66,17 +69,18 @@ class SCCCoordinator:
         task_record.task_set.job.task_started()
         task_record.start_time = datetime.datetime.now()
         
+        # Manufacture the dispatch message and send it to the task runner
         coord_send = self.lib.coord_send
-        dispatchmsg = pointer(TaskDispatchMessage(0, coreid, next_td).toStruct())
+        dispatchmsg = pointer(TaskDispatchMessage(self.COORDINATOR_CORE_ID, coreid, next_td).toStruct())
         coord_send(dispatchmsg)
         
+        # Keep a record of the fact that this core is now working on a task
         self.current_tasks[coreid] = (task, task_record)
 
 
     def thread_main(self):
         
         ciel.log("Starting up SCC coordinator, loading libciel-scc", "SCC", logging.INFO)
-        #cdll.LoadLibrary("librcceworker.so")
         libpath = os.getenv("LIBCIEL_PATH", "../src/c/src")
         self.lib = CDLL(libpath + "/libciel-scc.so")
         if self.lib is None:
@@ -85,62 +89,93 @@ class SCCCoordinator:
         self.lib.coord_hello()
         #redirect_stdout()
         
+        # Manufacture a list of cores that we can pass as arguments to the coord_init function
+        # in libciel. 
         corelist = []
         for i in range(self.num_cores):
             corelist.append(str(i))
         argc = c_int(self.num_cores + 3)
         targv = c_char_p * (self.num_cores + 3)
+        
+        # Args taken (according to RCCE convention): 
+        # (1) executable name, 
+        # (2) number of cores used, 
+        # (3) clock frequency in GHz (for timing ONLY, doesn't set clock freq)
+        # (4...50) core IDs for UE 0...47  
         argv = targv("libciel-scc", str(self.num_cores), "0.533", *corelist)
         self.lib.coord_init(argc, argv)
         
+        # Set up the return type for the coordinator receive method (ptr to message struct)
         coord_read = self.lib.coord_read
         coord_read.restype = POINTER(MESSAGE)
         
-        
+        # Main message loop
         while True:
-            #coord_send(testmsg)
-            print "coordinator waiting for messages..."
             # At the coordinator, we keep waiting for messages and return once we have received one
+            ciel.log("Coordinator waiting for messages...", "SCC", logging.INFO)
             msg = coord_read()
-            ciel.log("got message, parsing...", "SCC", logging.INFO)
-            #print "message from core %d: %s (length %d)" % (msg.contents.source, string_at(msg.contents.msg_body, msg.contents.length), msg.length)
+            ciel.log("Got message, parsing...", "SCC", logging.INFO)
+            #print "message from core %d: %s (length %d)" % (msg.contents.source, string_at(msg.contents.msg_body[5:]), msg.contents.length)
             
-            # decode the message JSON
-            body = string_at(msg.contents.msg_body, msg.contents.length)
-            bodyjson = simplejson.loads(body, object_hook=json_decode_object_hook)
+            # Get the message body out
+            body = msg.contents.msg_body
             
-            ciel.log("message from core %d of (length %d, type %s)" % (msg.contents.source, msg.contents.length, bodyjson["type"]), "SCC", logging.INFO)
+            # We no longer decode all messages as JSON immediately
+            #bodyjson = simplejson.loads(body, object_hook=json_decode_object_hook)
             
-            if bodyjson["type"] == "IDLE":
-                #self.send_next_task_to_core(msg.source)
-                print "got idle message from core %d" % msg.contents.source
-                self.threads[msg.contents.source] = threading.Thread(target=self.send_next_task_to_core, args=[msg.contents.source])
-                self.threads[msg.contents.source].start()
-            elif bodyjson["type"] == "GET":
-                print "got reference fetch message from core %d for reference %s" % (msg.contents.source, bodyjson["ref"])
+            # Find out what sort of message this is -- stored in first byte of message string
+            msg_type = int(body[0])
+            
+            ciel.log("Message from core %d of (length %d, type %s)" % (msg.contents.source, msg.contents.length, AbstractMessage.type_to_string(msg_type)), "SCC", logging.INFO)
+            
+            # Switch on message type
+            if msg_type == AbstractMessage.IDLE_MESSAGE:
+                # IDLE message: sent by cores when they initially report to the coordinator
+                ciel.log("Got idle message from core %d" % msg.contents.source, "SCC")
+                self.send_next_task_to_core(msg.contents.source)
+            
+            elif msg_type == AbstractMessage.GET_MESSAGE:
+                # GET message: task runner is asking for a reference's data to be sent over, 
+                # so we respond with that in a PUT message 
+                ciel.log("Got reference fetch message from core %d for reference %s" % (msg.contents.source, body[1:]))
                 
-                ref = bodyjson["ref"]
+                ref = simplejson.loads(body[1:], object_hook=json_decode_object_hook)
                 if not self.block_store.is_ref_local(ref):
                     ciel.log.error("Task runner %d asked for ref %s, which is not available locally", "SCC", logging.ERROR, False)
                 else:
                     fname = self.block_store.filename_for_ref(ref)
-                    #file = open(fname, 'rb')
                     
                     buf = ""
-                    buf += open(fname, 'rb')
-                    #refcontents = mmap.mmap(file)
+                    buf += open(fname, 'rb').read()
                     
                     refmsg = pointer(PutReferenceMessage(0, msg.contents.source, ref, buf))
+                    ciel.log("Sending message to core %d:" % (msg.contents.source, refmsg))
                     self.lib.coord_send(refmsg)
                 
+            elif msg_type == AbstractMessage.PUT_MESSAGE:
+                reflen = struct.unpack("I", body[1:5])[0]
+                clen = struct.unpack("I", body[(5+reflen):(5+reflen+4)])[0]
+                #print len(body)
+                #print " ".join([str(ord(x)) for x in body[0:6]])
+                ciel.log("Got reference put message from core %d for reference (length %d, ref %d, contents %d)" % (msg.contents.source, msg.contents.length, reflen, clen))
                 
-            elif bodyjson["type"] == "DONE":
+                refid = body[5:(5+reflen)]
+                contents = body[(5+reflen+4):(5+reflen+4+clen)]
+                
+                # Write the reference out to the block store
+                self.block_store.ref_from_string(contents, refid)
+                
+                
+            elif msg_type == AbstractMessage.DONE_MESSAGE:
                 # We are receiving the results of a task execution
-                ciel.log("Got task completion message from core %d" % msg.contents.source, "SCC", logging.INFO)
-                #(success, spawned_tasks, published_refs) = simplejson.loads(string_at(msg.msg_body, msg.length), object_hook=json_decode_object_hook)
-                success = bodyjson["body"][0]
-                spawned_tasks = bodyjson["body"][1] 
-                published_refs = bodyjson["body"][2]
+                ciel.log("Got task completion message from core %d (length %d)" % (msg.contents.source, msg.contents.length), "SCC", logging.INFO)
+                
+                reslen = struct.unpack("I", body[1:5])[0]
+                (success, spawned_tasks, published_refs) = simplejson.loads(body[5:(reslen+5)], object_hook=json_decode_object_hook)
+                
+                #success = bodyjson["body"][0]
+                #spawned_tasks = bodyjson["body"][1] 
+                #published_refs = bodyjson["body"][2]
                 
                 record = self.current_tasks[msg.contents.source][1]
                 task = self.current_tasks[msg.contents.source][0]
@@ -162,7 +197,7 @@ class SCCCoordinator:
                     # This will force the local block store to actually write the received SWDataValues out
                     # so that they can be sent to future tasks 
                     for ref in published_refs:
-                        self.qm.job_manager.worker.block_store.is_ref_local(ref)
+                        self.block_store.is_ref_local(ref)
                     
                     if not task:
                         ciel.log.error('Tried to handle completed task from core %d, but found no record of it in current_tasks' % (msg.contents.source), 'SCC', logging.ERROR, True)
@@ -170,17 +205,16 @@ class SCCCoordinator:
                     task.taskset.dec_runnable_count()
                     
                     ciel.log("Done handling task completion (task from core %d), thread joining" % msg.contents.source, "SCC", logging.INFO)
-
+ 
                     print "got to the end of task, thread joining"
                     self.threads[msg.contents.source].join()
                     
                     ciel.log("Joined, spinning up new thread", "SCC", logging.INFO)
-
-                    self.threads[msg.contents.source] = threading.Thread(target=self.send_next_task_to_core, args=[msg.contents.source])
-                    self.threads[msg.contents.source].start()
-
+ 
+                    self.send_next_task_to_core(msg.contents.source)
+ 
                     ciel.log("Spawn handler thread up and running", "SCC", logging.INFO)
-
+ 
                 else:
                     # report an error
                     ciel.log.error('Task %s on core %d did not complete successfully' % (task['task_id'], msg.contents.source), 'SCC', logging.ERROR, True)
@@ -188,14 +222,23 @@ class SCCCoordinator:
                 
                 
             else:
-                ciel.log.error('Received unrecognized message type %s from core %d' % (bodyjson["type"], bodyjson["src"]), 'SCC', logging.ERROR, True)
+                ciel.log.error('Received unrecognized message type %s from core %d' % (body[0], msg.contents.source), 'SCC', logging.ERROR, True)
             
             print "got to the end of the coordinator receive loop"
-            
-            
+        
+        
     def send_next_task_to_core(self, coreid):
+        
+        # We launch a new thread to handle the dispatch and running of a task in a non-blocking fashion.
+        # Note that this creates a maximum of (num_cores - 1) threads on the coordinator
+        self.threads[coreid] = threading.Thread(target=self.task_handler_thread_main, args=[coreid])
+        self.threads[coreid].start()
+        
+        
+    def task_handler_thread_main(self, coreid):
+        
+        # Get the next task from the queue manager
         task = self.qm.get_next_task(self.name)
-        #self.lib.coord_notify();
         
         if task is None:
             return
@@ -204,8 +247,12 @@ class SCCCoordinator:
                 self.handle_task(task, coreid)
             except Exception:
                 ciel.log.error('Uncaught error handling task in pool: %s' % (self.name), 'SCC', logging.ERROR, True)
+            
+            # Notify the queue manager that the task is now completed 
             self.qm.notify(self.name)
-            #self.threads[coreid].join()
+
+
+
 
 class FakeWorker:
     
@@ -291,14 +338,17 @@ class SCCTaskRunner:
             msg = tr_read()
             #print "message from coordinator (%d) of length %d: %s" % (msg.contents.source, msg.contents.length, string_at(msg.contents.msg_body, msg.contents.length)) 
             # Load TD from JSON
-            bodyObj = simplejson.loads(string_at(msg.contents.msg_body, msg.contents.length), object_hook=json_decode_object_hook)
-            print "message from coordinator (%d) of length %d, type %s" % (msg.contents.source, msg.contents.length, bodyObj['type']) 
+            #bodyObj = simplejson.loads(string_at(msg.contents.msg_body, msg.contents.length), object_hook=json_decode_object_hook)
+            body = string_at(msg.contents.msg_body)
+            msg_type = int(body[0])
+            print "message from coordinator (%d) of length %d, type %s" % (msg.contents.source, msg.contents.length, AbstractMessage.type_to_string(msg_type)) 
             
-            if not bodyObj['type'] == 'SPAWN':
+            if not msg_type == AbstractMessage.SPAWN_MESSAGE:
                 ciel.log.error('Message received is not of type SPAWN!', 'SCC', logging.ERROR, True)
                 continue
             
-            td = bodyObj["body"]
+            #td = bodyObj["body"]
+            td = simplejson.loads(string_at(body[1:]), object_hook=json_decode_object_hook)
             
             _=[self.block_store.is_ref_local(x) for x in td["inputs"]]
             
@@ -312,7 +362,7 @@ class SCCTaskRunner:
             except:
                 ciel.log.error('Error during executor task execution', 'SCC', logging.ERROR, True)
             
-            print "task completed"
+            ciel.log("Task on task runner completed", "SCC", logging.INFO)
             
             _=[self.block_store.is_ref_local(x) for x in record.published_refs]
             
@@ -322,7 +372,20 @@ class SCCTaskRunner:
                 record.published_refs = self.convert_refs(record.published_refs)
                 #pass
                 #task.taskset.task_graph.spawn_and_publish(task_record.spawned_tasks, task_record.published_refs, next_td)
-
+                
+            # send the data for the task's published references
+            for ref in record.published_refs:
+                if not self.block_store.is_ref_local(ref):
+                    ciel.log.error("Tried to publish a non-local reference (%s)" % ref, "SCC", False)
+                else:
+                    fname = self.block_store.filename_for_ref(ref)
+                    
+                    buf = ""
+                    buf += open(fname, 'rb').read()
+                    
+                    refmsg = pointer(PutReferenceMessage(me, coordinator, ref, buf).toStruct())
+                    self.lib.coord_send(refmsg)
+            
             msg = pointer(TaskCompletedMessage(me, coordinator, record.success, record.spawned_tasks, record.published_refs).toStruct())
             lib.tr_send(msg)
             print "sent task completion message, end of loop"
