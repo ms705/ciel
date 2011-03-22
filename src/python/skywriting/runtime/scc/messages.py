@@ -119,11 +119,9 @@ class PutReferenceMessage(AbstractMessage):
         self.body[0] = str(self.PUT_MESSAGE)
         self.body[1:5] = pack("I", reflen)
         boundary1 = 5+reflen
-        self.body[5:boundary1] = refid
+        self.body[5:boundary1] = str(refid)
         boundary2 = boundary1+4
         self.body[boundary1:boundary2] = pack("I", clen)
-        print len(str(content))
-        print len(self.body[boundary2:]) 
         self.body[boundary2:] = str(content)
     
     def str(self):

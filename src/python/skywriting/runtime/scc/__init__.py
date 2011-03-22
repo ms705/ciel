@@ -352,15 +352,19 @@ class SCCTaskRunner:
             
             #td = bodyObj["body"]
             td = simplejson.loads(string_at(body[1:]), object_hook=json_decode_object_hook)
+            ciel.log("Decoding finished", "SCC", logging.INFO)
             
             _=[self.block_store.is_ref_local(x) for x in td["inputs"]]
+            ciel.log("Reference locality check finished", "SCC", logging.INFO)
             
             # Make a TaskSetExecutionRecord and a TaskExecutionRecord with most of the parameters stubbed out
             taskset = TaskSetExecutionRecord(td, self.block_store, None, execution_features, self.worker)
+            ciel.log("Taskset constructed", "SCC", logging.INFO)
             record = TaskExecutionRecord(td, taskset, execution_features, self.block_store, None, self.worker)
             
             # Run the actual task (this will block)
             try:
+                ciel.log('Actually starting task now', "SCC", logging.INFO)
                 record.run()
             except:
                 ciel.log.error('Error during executor task execution', 'SCC', logging.ERROR, True)
