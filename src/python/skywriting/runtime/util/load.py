@@ -19,8 +19,7 @@ import simplejson
 import math
 import random
 import uuid
-from shared.references import SW2_ConcreteReference, SW2_FetchReference
-from skywriting.runtime.block_store import SWReferenceJSONEncoder
+from shared.references import SW2_ConcreteReference, SW2_FetchReference, SWReferenceJSONEncoder
 import sys
 import time
 
@@ -351,7 +350,7 @@ def main():
     index_ref = do_uploads(options.master, args, options.size, options.count, options.replication, options.delimiter, options.packet_size, options.name, options.urls)
 
     block_name = index_ref.id
-    index_targets = index_ref.netlocs
+    index_targets = index_ref.location_hints
 
     for target in index_targets:
         print 'swbs://%s/%s' % (target, block_name)

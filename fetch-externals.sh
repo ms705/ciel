@@ -10,6 +10,7 @@ then
     touch -r mahout-0.3.tar.bz2 mahout-timestamp
 fi
 
+<<<<<<< HEAD:fetch-externals.sh
 # GSON
 wget -N http://google-gson.googlecode.com/files/google-gson-1.6-release.zip
 if [ gson-timestamp -ot google-gson-1.6-release.zip ]
@@ -34,4 +35,11 @@ then
 	unzip iRCCE.tar.zip
 	tar -xf iRCCE.tar
 	touch -r iRCCE.tar.zip icce-timestamp
+=======
+wget -N http://google-gson.googlecode.com/files/google-gson-1.7.1-release.zip
+if [ gson-timestamp -ot google-gson-1.7.1-release.zip ]
+then
+    unzip google-gson-1.7.1-release.zip google-gson-1.7.1/gson-1.7.1.jar
+    touch -r google-gson-1.7.1-release.zip gson-timestamp
+>>>>>>> e92787982e42a6775e51f5b92fb6ff8b8a86b553:fetch-externals.sh
 fi

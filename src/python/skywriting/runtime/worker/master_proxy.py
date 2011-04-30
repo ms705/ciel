@@ -19,16 +19,15 @@ Created on 15 Apr 2010
 @author: dgm36
 '''
 from urlparse import urljoin
-from skywriting.runtime.block_store import SWReferenceJSONEncoder,\
-    json_decode_object_hook
+from shared.references import SWReferenceJSONEncoder
 from skywriting.runtime.exceptions import MasterNotRespondingException,\
-    WorkerShutdownException, RuntimeSkywritingError
+    WorkerShutdownException
 import logging
 import random
 import cherrypy
 import socket
 import httplib2
-from skywriting.runtime.block_store import post_string, post_string_noreturn, get_string
+from skywriting.runtime.pycurl_rpc import post_string, post_string_noreturn, get_string
 from threading import Event
 
 import simplejson
@@ -107,6 +106,11 @@ class MasterProxy:
     def publish_refs(self, job_id, task_id, refs):
         message_payload = simplejson.dumps(refs, cls=SWReferenceJSONEncoder)
         message_url = urljoin(self.master_url, 'control/task/%s/%s/publish' % (job_id, task_id))
+        self.backoff_request(message_url, "POST", message_payload, need_result=False)
+
+    def log(self, job_id, task_id, timestamp, message):
+        message_payload = simplejson.dumps([timestamp, message], cls=SWReferenceJSONEncoder)
+        message_url = urljoin(self.master_url, 'control/task/%s/%s/log' % (job_id, task_id))
         self.backoff_request(message_url, "POST", message_payload, need_result=False)
 
     def report_tasks(self, job_id, root_task_id, report):

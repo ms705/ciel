@@ -228,8 +228,10 @@ class TaskExecutionRecord:
         self.spawn_counter += 1
         return ret
     
-    def create_published_output_name(self):
-        ret = '%s:pub:%d' % (self.task_descriptor["task_id"], self.publish_counter)
+    def create_published_output_name(self, prefix=""):
+        if prefix == "":
+            prefix = "pub"
+        ret = '%s:%s:%d' % (self.task_descriptor["task_id"], prefix, self.publish_counter)
         self.publish_counter += 1
         return ret
 
@@ -243,7 +245,7 @@ class TaskExecutionRecord:
             new_task_descriptor["expected_outputs"] = []
         executor_class = self.execution_features.get_executor_class(new_task_descriptor["handler"])
         # Throws a BlameUserException if we can quickly determine the task descriptor is bad
-        return_obj = executor_class.build_task_descriptor(new_task_descriptor, self, self.block_store, **args)
+        return_obj = executor_class.build_task_descriptor(new_task_descriptor, self, **args)
         self.spawned_tasks.append(new_task_descriptor)
         return return_obj
 

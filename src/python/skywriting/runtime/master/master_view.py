@@ -13,7 +13,7 @@
 # OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 from __future__ import with_statement
 from cherrypy import HTTPError
-from skywriting.runtime.block_store import json_decode_object_hook,\
+from shared.references import json_decode_object_hook,\
     SWReferenceJSONEncoder
 import sys
 import simplejson
@@ -42,6 +42,7 @@ class ControlRoot:
         self.shutdown = ShutdownRoot(worker_pool)
         self.browse = WebBrowserRoot(job_pool)
         self.backup = BackupMasterRoot(backup_sender)
+        self.ref = RefRoot(job_pool)
 
     @cherrypy.expose
     def index(self):
@@ -273,10 +274,16 @@ class MasterTaskRoot:
             for ref in refs:
                 tx.publish(ref, task)
             tx.commit(job.task_graph)
+            job.schedule()
 
             self.backup_sender.publish_refs(task_id, refs)
-            ciel.engine.publish('schedule')
             return
+            
+        elif action == 'log':
+            # Message body is a JSON list containing UNIX timestamp in seconds and a message string.
+            request_body = cherrypy.request.body.read()
+            timestamp, message = simplejson.loads(request_body, object_hook=json_decode_object_hook)
+            ciel.log("%s %f %s" % (task_id, timestamp, message), 'TASK_LOG', logging.INFO)
             
         elif action == 'abort':
             # FIXME (maybe): There is currently no abort method on Task.
@@ -303,3 +310,23 @@ class BackupMasterRoot:
             standby_url = simplejson.loads(cherrypy.request.body.read(), object_hook=json_decode_object_hook)
             self.backup_sender.register_standby_url(standby_url)
             return 'Registered a hot standby'
+        
+class RefRoot:
+    
+    def __init__(self, job_pool):
+        self.job_pool = job_pool
+
+    @cherrypy.expose         
+    def default(self, job_id, ref_id):
+        
+        try:
+            job = self.job_pool.get_job_by_id(job_id)
+        except KeyError:
+            raise HTTPError(404)
+        
+        try:
+            ref = job.task_graph.get_reference_info(ref_id).ref
+        except KeyError:
+            raise HTTPError(404)
+
+        return simplejson.dumps(ref, cls=SWReferenceJSONEncoder)

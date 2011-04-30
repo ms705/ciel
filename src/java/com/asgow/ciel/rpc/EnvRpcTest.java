@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 
+import com.asgow.ciel.executor.Ciel;
 import com.asgow.ciel.references.Reference;
 import com.asgow.ciel.references.WritableReference;
 import com.asgow.ciel.tasks.StdinoutTaskInformation;
@@ -24,7 +25,7 @@ public class EnvRpcTest {
 		
 		System.out.println(result[0]);
 		
-		result = rpc.blockOn(result);
+		Ciel.blockOn(result);
 		
 		String childFile = rpc.getFilenameForReference(result[0]);
 		
@@ -44,13 +45,12 @@ public class EnvRpcTest {
 			OutputStreamWriter osw = (new OutputStreamWriter(outFile.open()));
 			osw.write("Hello world!");
 			osw.close();
-			rpc.closeOutput(0);
 			
 		} catch (IOException ioe) {
 			
 		}
 		
-		rpc.exit();
+		rpc.exit(false);
 		
 	}
 		

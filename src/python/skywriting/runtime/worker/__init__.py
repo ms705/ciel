@@ -36,6 +36,8 @@ from datetime import datetime
 from skywriting.runtime.lighttpd import LighttpdAdapter
 from skywriting.runtime.worker.process_pool import ProcessPool
 from skywriting.runtime.worker.multiworker import MultiWorker
+from skywriting.runtime.pycurl_thread import create_pycurl_thread
+from skywriting.runtime.tcp_server import create_tcp_server
 
 class WorkerState:
     pass
@@ -47,6 +49,11 @@ class Worker(plugins.SimplePlugin):
     
     def __init__(self, bus, port, options):
         plugins.SimplePlugin.__init__(self, bus)
+
+        create_pycurl_thread(bus)
+        if options.aux_port is not None:
+            create_tcp_server(options.aux_port)
+
         self.id = None
         self.port = port
         self.master_url = options.master
@@ -66,8 +73,7 @@ class Worker(plugins.SimplePlugin):
             os.mkdir(block_store_dir)
         except:
             pass
-        self.block_store = BlockStore(ciel.engine, self.hostname, self.port, block_store_dir, ignore_blocks=options.ignore_blocks)
-        self.block_store.subscribe()
+        self.block_store = BlockStore(self.hostname, self.port, block_store_dir, ignore_blocks=options.ignore_blocks)
         self.block_store.build_pin_set()
         self.block_store.check_local_blocks()
         create_watcher_thread(bus, self.block_store)
@@ -81,7 +87,7 @@ class Worker(plugins.SimplePlugin):
         self.scheduling_classes = parse_scheduling_class_option(options.scheduling_classes, options.num_threads)
         self.multiworker = MultiWorker(ciel.engine, self)
         self.multiworker.subscribe()
-        self.process_pool = ProcessPool(bus, self)
+        self.process_pool = ProcessPool(bus, self, self.execution_features.process_cacheing_executors)
         self.process_pool.subscribe()
         self.runnable_executors = self.execution_features.runnable_executors.keys()
         self.server_root = WorkerRoot(self)

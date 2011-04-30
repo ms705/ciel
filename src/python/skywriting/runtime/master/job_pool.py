@@ -12,7 +12,7 @@
 # ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 # OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 from cherrypy.process import plugins
-from skywriting.runtime.block_store import SWReferenceJSONEncoder
+from shared.references import SWReferenceJSONEncoder
 from skywriting.runtime.task import TASK_STATES, \
     build_taskpool_task_from_descriptor, TASK_QUEUED, TASK_FAILED,\
     TASK_COMMITTED, TASK_QUEUED_STREAMING
@@ -31,7 +31,6 @@ from shared.references import SWErrorReference
 from skywriting.runtime.master.scheduling_policy import LocalitySchedulingPolicy,\
     get_scheduling_policy
 import collections
-import sys
 
 JOB_CREATED = -1
 JOB_ACTIVE = 0
@@ -70,7 +69,7 @@ class Job:
         
         self.runnable_queue = Queue.Queue()
         
-        self.global_queue = {}
+        self.global_queues = {}
         
         self.result_ref = None
 
@@ -115,12 +114,14 @@ class Job:
                     self.assign_scheduling_class_to_task(task)
                     worker = self.select_worker_for_task(task)
                     self.workers[worker].queue_task(task)
+                    if task.get_constrained_location() is None:
+                        self.push_task_on_global_queue(task)
                 except Queue.Empty:
                     break
             
             # 2. For each worker, check if we need to assign any tasks.
             total_assigned = 0
-            undersubscribed_worker_class = []
+            undersubscribed_worker_classes = []
             for worker, wstate in self.workers.items():
                 for scheduling_class, capacity in worker.scheduling_classes.items():
                     num_assigned = wstate.tasks_assigned_in_class(scheduling_class)
@@ -128,21 +129,59 @@ class Job:
                         task = wstate.pop_task_from_queue(scheduling_class)
                         if task is None:
                             break
+                        elif task.state not in (TASK_QUEUED, TASK_QUEUED_STREAMING):
+                            continue
                         task.add_worker(worker)
                         wstate.assign_task(task)
                         self.job_pool.worker_pool.execute_task_on_worker(worker, task)
                         num_assigned += 1
                         total_assigned += 1
                     if num_assigned < capacity:
-                        undersubscribed_worker_class.append((worker, scheduling_class))
+                        undersubscribed_worker_classes.append((worker, scheduling_class, capacity - num_assigned))
+
+            for worker, scheduling_class, deficit in undersubscribed_worker_classes:
+                num_global_assigned = 0
+                while num_global_assigned < deficit:
+                    task = self.pop_task_from_global_queue(scheduling_class)
+                    if task is None:
+                        break
+                    elif task.state not in (TASK_QUEUED, TASK_QUEUED_STREAMING):
+                        continue
+                    task.add_worker(worker)
+                    self.workers[worker].assign_task(task)
+                    self.job_pool.worker_pool.execute_task_on_worker(worker, task)
+                    num_global_assigned += 1
         
-        ciel.log('Finished scheduling job %s. Task assigned = %d' % (self.id, total_assigned), 'JOB', logging.INFO)
+        ciel.log('Finished scheduling job %s. Tasks assigned = %d' % (self.id, total_assigned), 'JOB', logging.INFO)
         
+    def pop_task_from_global_queue(self, scheduling_class):
+        if scheduling_class == '*':
+            for queue in self.global_queues.values():
+                try:
+                    return queue.popleft()
+                except IndexError:
+                    pass
+            return None
+        else:
+            try:
+                return self.global_queues[scheduling_class].popleft()
+            except IndexError:
+                return None
+            except KeyError:
+                return None
+        
+    def push_task_on_global_queue(self, task):
+        try:
+            class_queue = self.global_queues[task.scheduling_class]
+        except KeyError:
+            class_queue = collections.deque()
+            self.global_queues[task.scheduling_class] = class_queue
+        class_queue.append(task)
         
     def select_worker_for_task(self, task):
-        if task.has_constrained_location():
-            fixed_netloc = task.get_constrained_location()
-            worker = self.job_pool.worker_pool.get_worker_at_netloc(fixed_netloc)
+        constrained_location = task.get_constrained_location()
+        if constrained_location is not None:
+            worker = self.job_pool.worker_pool.get_worker_at_netloc(constrained_location)
         elif task.state in (TASK_QUEUED_STREAMING, TASK_QUEUED):
             worker, _ = self.scheduling_policy.select_worker_for_task(task, self.job_pool.worker_pool)
         else:
@@ -152,7 +191,9 @@ class Job:
         return worker
         
     def assign_scheduling_class_to_task(self, task):
-        if task.handler == 'swi':
+        if task.scheduling_class is not None:
+            return
+        elif task.handler == 'swi':
             task.scheduling_class = 'cpu'
         elif task.handler == 'init':
             task.scheduling_class = 'cpu'

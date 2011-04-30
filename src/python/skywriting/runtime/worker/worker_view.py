@@ -11,10 +11,8 @@
 # WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
 # ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 # OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-from skywriting.runtime.executors import kill_all_running_children
-from shared.references import SW2_FetchReference, SW2_ConcreteReference
-import logging
-import StringIO
+import skywriting.runtime.executors
+from skywriting.runtime.executor_helpers import ref_from_string
 
 '''
 Created on 8 Feb 2010
@@ -22,15 +20,14 @@ Created on 8 Feb 2010
 @author: dgm36
 '''
 from cherrypy.lib.static import serve_file
-from skywriting.runtime.block_store import json_decode_object_hook,\
+from shared.references import json_decode_object_hook,\
     SWReferenceJSONEncoder
+from skywriting.runtime.remote_stat import receive_stream_advertisment
+from skywriting.runtime.producer_stat import subscribe_output, unsubscribe_output
 import sys
 import simplejson
 import cherrypy
 import os
-import time
-import ciel
-import logging
 
 class WorkerRoot:
     
@@ -46,7 +43,7 @@ class ControlRoot:
         self.master = RegisterMasterRoot(worker)
         self.task = TaskRoot(worker)
         self.data = DataRoot(worker.block_store)
-        self.streamstat = StreamStatRoot(worker.block_store)
+        self.streamstat = StreamStatRoot()
         self.features = FeaturesRoot(worker.execution_features)
         self.kill = KillRoot()
         self.log = LogRoot(worker)
@@ -62,19 +59,16 @@ class ControlRoot:
 
 class StreamStatRoot:
 
-    def __init__(self, block_store):
-        self.block_store = block_store
-
     @cherrypy.expose
     def default(self, id, op):
         if cherrypy.request.method == "POST":
             payload = simplejson.loads(cherrypy.request.body.read())
             if op == "subscribe":
-                self.block_store.subscribe_to_stream(payload["netloc"], payload["chunk_size"], id)
+                subscribe_output(payload["netloc"], payload["chunk_size"], id)
             elif op == "unsubscribe":
-                self.block_store.unsubscribe_from_stream(payload["netloc"], id)
+                unsubscribe_output(payload["netloc"], id)
             elif op == "advert":
-                self.block_store.receive_stream_advertisment(id, **payload)
+                receive_stream_advertisment(id, **payload)
             else:
                 raise cherrypy.HTTPError(404)
         else:
@@ -87,7 +81,7 @@ class KillRoot:
     
     @cherrypy.expose
     def index(self):
-        kill_all_running_children()
+        skywriting.runtime.executors.kill_all_running_children()
         sys.exit(0)
 
 class RegisterMasterRoot:
@@ -181,10 +175,20 @@ class DataRoot:
             filename = self.block_store.streaming_filename(safe_id)
             response_body = serve_file(filename)
             return response_body
+#            filename = self.block_store.filename(safe_id)
+#            try:
+#                response_body = serve_file(filename)
+#                return response_body
+#            except cherrypy.HTTPError as he:
+#                if he.status == 404:
+#                    response_body = serve_file(self.block_store.producer_filename(safe_id))
+#                    return response_body
+#                else:
+#                    raise
                 
         elif cherrypy.request.method == 'POST':
             request_body = cherrypy.request.body.read()
-            new_ref = self.block_store.ref_from_string(request_body, safe_id)
+            new_ref = ref_from_string(request_body, safe_id)
             if self.backup_sender is not None:
                 self.backup_sender.add_data(safe_id, request_body)
             #if self.task_pool is not None:
@@ -205,7 +209,7 @@ class DataRoot:
         if cherrypy.request.method == 'POST':
             id = self.block_store.allocate_new_id()
             request_body = cherrypy.request.body.read()
-            new_ref = self.block_store.ref_from_string(request_body, id)
+            new_ref = ref_from_string(request_body, id)
             if self.backup_sender is not None:
                 self.backup_sender.add_data(id, request_body)
             #if self.task_pool is not None:

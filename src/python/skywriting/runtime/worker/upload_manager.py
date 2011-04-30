@@ -11,11 +11,13 @@
 # WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
 # ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 # OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-import tempfile
 import shutil
 import logging
 import os
 import ciel
+from skywriting.runtime.producer import make_local_output
+from skywriting.runtime.executor_helpers import retrieve_filenames_for_refs,\
+    sync_retrieve_refs
 
 class UploadSession:
     
@@ -23,8 +25,10 @@ class UploadSession:
         self.id = id
         self.block_store = block_store
         self.current_pos = 0
-        self.output_ctx = block_store.make_local_output(self.id)
-        self.output_filename = self.output_ctx.get_filename()
+        self.output_ctx = make_local_output(self.id)
+        (filename, is_fd) = self.output_ctx.get_filename_or_fd()
+        assert not is_fd
+        self.output_filename = filename
         
     def save_chunk(self, start_index, body_file):
         assert self.current_pos == start_index
@@ -66,10 +70,11 @@ class UploadManager:
     def fetch_refs_deferred(self, session_id, refs):
         ciel.log.error('Fetching session %s' % session_id, 'UPLOAD', logging.INFO)
         try:
-            self.block_store.retrieve_filenames_for_refs_eager(refs)
+            sync_retrieve_refs(refs)
             self.current_fetches[session_id] = 200
             for ref in refs:
                 self.block_store.pin_ref_id(ref.id)
         except:
+            ciel.log.error('Exception during attempted fetch session %s' % session_id, 'UPLOAD', logging.WARNING, True)
             self.current_fetches[session_id] = 500
         ciel.log.error('Finished session %s, status = %d' % (session_id, self.current_fetches[session_id]), 'UPLOAD', logging.INFO)

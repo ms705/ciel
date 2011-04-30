@@ -23,7 +23,8 @@ from skywriting.runtime.master.recovery import RecoveryManager, \
     TaskFailureInvestigator
 from skywriting.runtime.master.worker_pool import WorkerPool
 from skywriting.runtime.task_executor import TaskExecutorPlugin
-from skywriting.runtime.block_store import post_string
+from skywriting.runtime.pycurl_rpc import post_string
+from skywriting.runtime.pycurl_thread import create_pycurl_thread
 import cherrypy
 import ciel
 import logging
@@ -37,6 +38,8 @@ import urllib
 import urllib2
 
 def master_main(options):
+
+    create_pycurl_thread(ciel.engine)
 
     deferred_worker = DeferredWorkPlugin(ciel.engine)
     deferred_worker.subscribe()
@@ -54,7 +57,10 @@ def master_main(options):
     backup_sender = BackupSender(cherrypy.engine)
     backup_sender.subscribe()
 
-    local_hostname = socket.getfqdn()
+    if options.hostname is not None:
+        local_hostname = options.hostname
+    else:
+        local_hostname = socket.getfqdn()
     local_port = cherrypy.config.get('server.socket_port')
     master_netloc = '%s:%d' % (local_hostname, local_port)
     ciel.log('Local port is %d' % local_port, 'STARTUP', logging.INFO)
@@ -69,8 +75,7 @@ def master_main(options):
     except:
         pass
 
-    block_store = BlockStore(ciel.engine, local_hostname, local_port, block_store_dir)
-    block_store.subscribe()
+    block_store = BlockStore(local_hostname, local_port, block_store_dir)
     block_store.build_pin_set()
     block_store.check_local_blocks()
 

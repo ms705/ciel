@@ -15,8 +15,8 @@
 from shared.references import SW2_ConcreteReference, SW2_TombstoneReference
 from cherrypy.process import plugins
 import urllib2
-from skywriting.runtime.block_store import BLOCK_LIST_RECORD_STRUCT,\
-    json_decode_object_hook
+from skywriting.runtime.block_store import BLOCK_LIST_RECORD_STRUCT
+from shared.references import json_decode_object_hook
 import logging
 import os
 import simplejson
@@ -73,9 +73,10 @@ class TaskFailureInvestigator:
             if worker is not None:
                 self.worker_pool.worker_failed(worker)
                 
-        # Finally, propagate the failure to the task pool, so that we can re-run the failed task.
-        # FIXME: need to route this through the job.
-        task.job.task_graph.task_failed(task, revised_bindings, reason, detail)
+        with task.job._lock:
+            # Finally, propagate the failure to the task pool, so that we can re-run the failed task.
+            # FIXME: need to route this through the job.
+            task.job.task_graph.task_failed(task, revised_bindings, reason, detail)
 
 class RecoveryManager(plugins.SimplePlugin):
     
