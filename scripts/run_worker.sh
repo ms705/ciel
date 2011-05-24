@@ -10,11 +10,10 @@ MASTER=${MASTER_HOST:-http://127.0.0.1:8000}
 
 WORKER_PORT=${WORKER_PORT:-8001}
 
-if [[ $SCALA_HOME != "" ]]; then
+if [ ! -d "$SCALA_HOME" ]; then
     SCALA_CLASSPATH=$SCALA_HOME/lib/scala-library.jar
     if [ ! -e "${SCALA_CLASSPATH}" ]; then
       echo Not found: ${SCALA_CLASSPATH}
-      exit 1
     fi
 fi
 
