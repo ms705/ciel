@@ -26,6 +26,7 @@ then
 	unzip iRCCE.tar.zip
 	tar -xf iRCCE.tar
 	touch -r iRCCE.tar.zip icce-timestamp
+fi
 
 # GSON
 wget -N http://google-gson.googlecode.com/files/google-gson-1.7.1-release.zip
