@@ -38,6 +38,7 @@ from skywriting.runtime.worker.process_pool import ProcessPool
 from skywriting.runtime.worker.multiworker import MultiWorker
 from skywriting.runtime.pycurl_thread import create_pycurl_thread
 from skywriting.runtime.tcp_server import create_tcp_server
+from skywriting.runtime.util.profiler import SarProfiler
 
 class WorkerState:
     pass
@@ -107,6 +108,7 @@ class Worker(plugins.SimplePlugin):
             self.cherrypy_conf["/skyweb"] = { "tools.staticdir.on": True, "tools.staticdir.dir": options.staticbase }
 
         self.subscribe()
+        
 
     def subscribe(self):
         self.bus.subscribe('stop', self.stop, priority=10)
@@ -203,6 +205,7 @@ def worker_main(options):
     
     w = Worker(ciel.engine, local_port, options)
     w.start_running()
+    
 
 if __name__ == '__main__':
     skywriting.main("worker")

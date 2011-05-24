@@ -23,6 +23,9 @@ import random
 import threading
 import math
 
+from skywriting.runtime.scc import *
+
+
 EWMA_ALPHA = 0.75
 INITIAL_TASK_COST = 0.5
 
@@ -383,6 +386,7 @@ class WorkerThreadPool:
             else:
                 try:
                     self.handle_task(task)
+                    
                 except Exception:
                     ciel.log.error('Uncaught error handling task in pool: %s' % (self.scheduling_class), 'MULTIWORKER', logging.ERROR, True)
                 self.queue_manager.notify(self.scheduling_class)
@@ -429,7 +433,6 @@ class SCCCorePool:
             
     def start(self):
         self.is_running = True
-        from skywriting.runtime.scc import *
         ciel.log("Starting SCC coordinator main thread", "SCC", logging.INFO)
         c = SCCCoordinator(self.name, self.queue_manager, self.num_cores)
         self.thread = threading.Thread(target=c.thread_main, args=())

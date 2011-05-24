@@ -157,9 +157,10 @@ class TaskExecutionRecord:
         return time.mktime(t.timetuple()) + t.microsecond / 1e6
         
     def get_profiling(self):
-        return {'CREATED' : self.as_timestamp(self.creation_time),
-                'STARTED' : self.as_timestamp(self.start_time),
-                'FINISHED' : self.as_timestamp(self.finish_time)}
+            return {'CREATED' : self.as_timestamp(self.creation_time),
+                    'STARTED' : self.as_timestamp(self.start_time),
+                    'FINISHED' : self.as_timestamp(self.finish_time)
+                    }
         
     def run(self):
         ciel.engine.publish("worker_event", "Start execution " + repr(self.task_descriptor['task_id']) + " with handler " + self.task_descriptor['handler'])

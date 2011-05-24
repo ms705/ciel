@@ -32,6 +32,8 @@ from skywriting.runtime.fetcher import fetch_ref_async
 from skywriting.runtime.object_cache import retrieve_object_for_ref, ref_from_object,\
     cache_object
 
+from skywriting.runtime.util import profiler
+
 import hashlib
 import simplejson
 import logging
@@ -42,6 +44,8 @@ import os.path
 import threading
 import pickle
 import time
+import uuid
+import pprint
 from subprocess import PIPE
 from datetime import datetime
 
@@ -246,13 +250,33 @@ class BaseExecutor:
         
     @classmethod
     def build_task_descriptor(cls, task_descriptor, parent_task_record):
+        
+        if parent_task_record.task_descriptor is not None:
+            try:
+                val = parent_task_record.task_descriptor["task_private"]["start_args"]["profiling_enabled"]
+                task_descriptor["task_private"]["profiling_enabled"] = val
+                ciel.log('Profiling set to %s in start_args' % val, 'PROFILER', logging.INFO)
+            except:
+                try:
+                    val = parent_task_record.task_descriptor["task_private"]["profiling_enabled"]
+                    task_descriptor["task_private"]["profiling_enabled"] = val
+                    ciel.log('Profiling set to %s in parent task' % val, 'PROFILER', logging.INFO)
+                except:
+                    pass
+        
         # Convert task_private to a reference in here. 
         task_private_id = ("%s:_private" % task_descriptor["task_id"])
         task_private_ref = ref_from_object(task_descriptor["task_private"], BaseExecutor.TASK_PRIVATE_ENCODING, task_private_id)
         parent_task_record.publish_ref(task_private_ref)
         task_descriptor["task_private"] = task_private_ref
         task_descriptor["dependencies"].append(task_private_ref)
-
+    
+    def open_profile_output(self):
+        output_name = str(uuid.uuid4())
+        output_ctx = EphemeralOutput(output_name, self)
+        return output_ctx
+    
+        
 class OngoingFetch:
 
     def __init__(self, ref, chunk_size, sole_consumer=False, make_sweetheart=False, must_block=False):
@@ -421,6 +445,16 @@ class OngoingOutput:
         else:
             self.close()
 
+class EphemeralOutput(OngoingOutput):
+    def __init__(self, output_name, executor):
+        self.output_ctx = make_local_output(output_name)
+        self.output_name = output_name
+        self.executor = executor
+        self.filename = None
+        self.may_pipe = False
+        self.make_local_sweetheart = False
+        
+        
 # Return states for proc task termination.
 PROC_EXITED = 0
 PROC_MUST_KEEP = 1
@@ -442,7 +476,8 @@ class ProcExecutor(BaseExecutor):
     @classmethod
     def build_task_descriptor(cls, task_descriptor, parent_task_record, 
                               process_record_id=None, is_fixed=False, command=None, proc_pargs=[], proc_kwargs={}, force_n_outputs=None,
-                              n_extra_outputs=0, extra_dependencies=[], is_tail_spawn=False, accept_ref_list_for_single=False):
+                              n_extra_outputs=0, extra_dependencies=[], is_tail_spawn=False, accept_ref_list_for_single=False,
+                              profiling_enabled=False):
 
         #if process_record_id is None and start_command is None:
         #    raise BlameUserException("ProcExecutor tasks must specify either process_record_id or start_command")
@@ -453,6 +488,7 @@ class ProcExecutor(BaseExecutor):
             task_descriptor["task_private"]["command"] = command
         task_descriptor["task_private"]["proc_pargs"] = proc_pargs
         task_descriptor["task_private"]["proc_kwargs"] = proc_kwargs
+        task_descriptor["task_private"]["profiling_enabled"] = profiling_enabled
         task_descriptor["dependencies"].extend(extra_dependencies)
 
         task_private_id = ("%s:_private" % task_descriptor["task_id"])
@@ -465,7 +501,7 @@ class ProcExecutor(BaseExecutor):
         
         task_descriptor["task_private"] = task_private_ref
         task_descriptor["dependencies"].append(task_private_ref)
-
+        
         if force_n_outputs is not None:        
             if "expected_outputs" in task_descriptor and len(task_descriptor["expected_outputs"]) > 0:
                 raise BlameUserException("Task already had outputs, but force_n_outputs is set")
@@ -476,6 +512,16 @@ class ProcExecutor(BaseExecutor):
                 return SW2_FutureReference(task_descriptor["expected_outputs"][0])
             else:
                 return [SW2_FutureReference(refid) for refid in task_descriptor["expected_outputs"]]
+        
+        #pprint.pprint(parent_task_record.task_descriptor)
+        if parent_task_record.task_descriptor is not None:
+            try:
+                task_descriptor["task_private"]["profiling_enabled"] = parent_task_record.task_descriptor["task_private"]["start_args"]["profiling_enabled"]
+            except:
+                try:
+                    task_descriptor["task_private"]["profiling_enabled"] = parent_task_record.task_descriptor["task_private"]["profiling_enabled"]
+                except:
+                    pass
 
     def get_command(self):
         raise RuntimeSkywritingError("Attempted to get_command() for an executor that does not define this.")
@@ -498,6 +544,7 @@ class ProcExecutor(BaseExecutor):
         self.task_record = task_record
         self.task_descriptor = task_descriptor
         self.expected_outputs = self.task_descriptor['expected_outputs']
+        self.profiling_output = None
         
         if "id" in task_private:
             id = task_private['id']
@@ -525,6 +572,11 @@ class ProcExecutor(BaseExecutor):
         
         #ciel.log('Got reader and writer FIFOs', 'PROC', logging.INFO)
 
+        # start profiling, if enabled
+        if task_private['profiling_enabled']:
+            self.profiler = profiler.SarProfiler(self.block_store)
+            self.profiler.start(self.open_profile_output()['filename'])
+
         write_framed_json(("start_task", task_private), writer)
 
         try:
@@ -537,6 +589,10 @@ class ProcExecutor(BaseExecutor):
         except:
             ciel.log('Got unexpected error', 'PROC', logging.ERROR, True)
             finished = PROC_ERROR
+        
+        # finished, so stop profiling
+        if task_private['profiling_enabled']:
+            self.profiler.stop()
         
         if finished == PROC_EXITED:
             
@@ -690,11 +746,21 @@ class ProcExecutor(BaseExecutor):
             self.task_record.prepublish_refs([ref])
         filename = output_ctx.get_filename()
         return {"filename": filename}
-
+    
+    def open_profile_output(self):
+        if self.profiling_output is not None:
+            raise Exception("Tried to open profiling output which was already open")
+        output_name = uuid.uuid4()
+        output_ctx = EphemeralOutput(output_name, self)
+        self.profiling_output = output_ctx
+        self.context_manager.add_context(output_ctx)
+        filename = output_ctx.get_filename()
+        return {"filename": filename}
+    
     def stop_output(self, index):
         self.context_manager.remove_context(self.ongoing_outputs[index])
         del self.ongoing_outputs[index]
-
+    
     def close_output(self, index, size=None):
         output = self.ongoing_outputs[index]
         if size is None:
@@ -918,7 +984,7 @@ class SkyPyExecutor(ProcExecutor):
             task_descriptor["task_private"]["py_ref"] = pyfile_ref
             task_descriptor["dependencies"].append(pyfile_ref)
         add_package_dep(parent_task_record.package_ref, task_descriptor)
-
+        
         return ProcExecutor.build_task_descriptor(task_descriptor, parent_task_record,  
                                                     is_tail_spawn=is_tail_spawn, **kwargs)
 
@@ -1024,6 +1090,9 @@ class OCamlExecutor(ProcExecutor):
         
         if args is not None:
             task_descriptor["task_private"]["args"] = args
+            
+        if "profiling_enabled" in task_descriptor["task_private"]:
+            kwargs["profiling_enabled"] = task_descriptor["task_private"]["profiling_enabled"]
         
         return ProcExecutor.build_task_descriptor(task_descriptor, parent_task_record, n_extra_outputs=0, is_tail_spawn=is_tail_spawn, is_fixed=False, accept_ref_list_for_single=True, **kwargs)
         
@@ -1066,6 +1135,9 @@ class SkywritingExecutor(ProcExecutor):
             task_descriptor["task_private"]["start_env"] = start_env
             task_descriptor["task_private"]["start_args"] = start_args
         add_package_dep(parent_task_record.package_ref, task_descriptor)
+        
+        if "profiling_enabled" in task_descriptor["task_private"]:
+            kwargs["profiling_enabled"] = task_descriptor["task_private"]["profiling_enabled"]
         
         return ProcExecutor.build_task_descriptor(task_descriptor, parent_task_record, 
                                                   is_tail_spawn=is_tail_spawn, is_fixed=False, **kwargs)
@@ -1162,6 +1234,15 @@ class SimpleExecutor(BaseExecutor):
         except KeyError:
             self.debug_opts = []
         self.resolve_required_refs(self.args)
+        
+        # start profiling, if enabled
+        if task_descriptor['task_private']['profiling_enabled']:
+            self.profiler = profiler.SarProfiler(self.block_store)
+            self.profile_output = self.open_profile_output()
+            self.profiler.start(self.profile_output.get_filename())
+        else:
+            self.profiler = None
+            
         try:
             self._execute()
             for ref in self.output_refs:
@@ -1175,8 +1256,15 @@ class SimpleExecutor(BaseExecutor):
             raise
         finally:
             self.cleanup_task()
+            
         
     def cleanup_task(self):
+        # finished, so stop profiling
+        if self.profiler is not None:
+            self.profiler.stop()
+            self.profile_output.close()
+            print self.profile_output.get_completed_ref()
+        
         self._cleanup_task()
     
     def _cleanup_task(self):

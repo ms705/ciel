@@ -5,8 +5,8 @@ Created on 9 Mar 2011
 '''
 from skywriting.runtime.exceptions import ReferenceUnavailableException,\
     AbortedException
-from skywriting.runtime.block_store import json_decode_object_hook,\
-    SWReferenceJSONEncoder, BlockStore
+from shared.references import *
+from skywriting.runtime.block_store import BlockStore
 from skywriting.runtime.local_task_graph import LocalTaskGraph, LocalJobOutput
 from skywriting.runtime.task_executor import TaskExecutionRecord,\
     TaskSetExecutionRecord

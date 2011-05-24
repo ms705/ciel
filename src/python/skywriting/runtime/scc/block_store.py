@@ -14,7 +14,7 @@ import struct
 from ctypes import *
 
 
-from skywriting.runtime.block_store import BlockStore, json_decode_object_hook
+from skywriting.runtime.block_store import BlockStore
 
 class FakeBlockStore(BlockStore):
     
