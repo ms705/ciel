@@ -10,6 +10,8 @@ if [ ! -d "$ABS_BLOCK_LOCATION" ]; then
   mkdir -p "$ABS_BLOCK_LOCATION"
 fi
 
+MASTER_PORT=${MASTER_PORT:-"8000"}
+
 LIGHTTPD_BIN=`which lighttpd`
 if [ "$LIGHTTPD_BIN" != "" ]; then
   EXTRA_CONF="${EXTRA_CONF} --lighttpd-conf $BASE/src/python/skywriting/runtime/lighttpd.conf"
