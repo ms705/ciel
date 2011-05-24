@@ -1,9 +1,10 @@
-#!/usr/bin/env python
+#!/tmp/pypy/bin/pypy -u
 
 import sys
 import math
 import array
 import pickle
+#import struct
 
 def init_vals (t,v,rf,n):
   h = t / float(n)
@@ -22,12 +23,14 @@ def gen_initial_optvals (n,s,u,d,k,cp):
   for j in range(n,-1,-1):
     stkval = c_stkval (float(n),s,u,d,float(j))
     v=max(0.0,(cp * (stkval - k)))
+    #print >> sys.stdout, struct.pack("f", v)
     pickle.dump(v, sys.stdout)
 
 def eqn(q,drift,a,b):
   return (((q * a) + (1.0 - q) * b) / drift)
 
 def apply_column(v,v1,acc,pos,chunk,q,drift):
+#  print >> sys.stderr, "apply_column"
   v1 = acc[0]
   acc[0] = v
   maxcol = min(chunk,pos)
@@ -36,14 +39,19 @@ def apply_column(v,v1,acc,pos,chunk,q,drift):
     v1 = acc[idx]
     acc[idx] = nv1;
   if maxcol == chunk:
+    #print >> sys.stdout, struct.pack("f", acc[maxcol])
     pickle.dump(acc[maxcol], sys.stdout)
 
 def process_rows(rowstart,rowto,q,drift):
+#  print >> sys.stderr, "process_rows"
+  #print >> sys.stdout, struct.pack("i", rowto)
   pickle.dump(rowto, sys.stdout)
   chunk = rowstart - rowto
   acc = array.array('f',[0.0 for x in range(0,chunk+1)])
   v1 = 0.0
   for pos in range(0,rowstart+1):
+    #r = sys.stdin.read(4)
+    #v = struct.unpack("f", r)[0]
     v = pickle.load(sys.stdin)
     apply_column(v,v1,acc,pos,chunk,q,drift)
 
@@ -59,12 +67,21 @@ def main():
   start = int(sys.argv[9])
   (q,u,d,drift) = init_vals(t,v,rf,n)
   if start == 1:
+    #pn = struct.pack("i", n)
+#    print >> sys.stderr, "writing pn (length %d)\n" % len(pn)
+    #sys.stdout.write(pn)
+    #sys.stdout.flush()
     pickle.dump(n,sys.stdout)
     gen_initial_optvals(n,s,u,d,k,cp)
   else:
+    #r = sys.stdin.read(4)
+#    print >> sys.stderr, "r is %s\n" % r
+    #rowstart = struct.unpack("i",r)[0]
     rowstart = pickle.load(sys.stdin)
     if rowstart == 0:
       print "%.9f\n" % pickle.load(sys.stdin)
+      #r = sys.stdin.read(4)
+      #print "%.9f\n" % struct.unpack("f", r)[0]
     else:
       rowto = max(0,(rowstart - chunk))
       process_rows(rowstart,rowto,q,drift)

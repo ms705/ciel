@@ -16,11 +16,11 @@ from __future__ import with_statement
 
 from shared.references import \
     SWRealReference, SW2_FutureReference, SWDataValue, \
-    SWErrorReference, SW2_SweetheartReference, SW2_TombstoneReference,\
+    SWErrorReference, SW2_SweetheartReference,\
     SW2_FixedReference, SWReferenceJSONEncoder, SW2_ConcreteReference
 from shared.io_helpers import read_framed_json, write_framed_json
-from skywriting.runtime.exceptions import BlameUserException, MissingInputException, ReferenceUnavailableException,\
-    RuntimeSkywritingError
+from skywriting.runtime.exceptions import BlameUserException, ReferenceUnavailableException,\
+    RuntimeSkywritingError, MissingInputException
 from skywriting.runtime.executor_helpers import ContextManager, retrieve_filename_for_ref, \
     retrieve_filenames_for_refs, get_ref_for_url, ref_from_string, \
     retrieve_file_or_string_for_ref, ref_from_safe_string,\
@@ -46,6 +46,8 @@ import pickle
 import time
 import uuid
 import pprint
+import socket
+import struct
 from subprocess import PIPE
 from datetime import datetime
 
@@ -53,6 +55,12 @@ from errno import EPIPE
 
 import ciel
 import traceback
+
+try:
+    import sendmsg
+    sendmsg_enabled = True
+except ImportError:
+    sendmsg_enabled = False
 
 running_children = {}
 
@@ -141,7 +149,7 @@ def package_lookup(task_record, block_store, key):
     if task_record.package_ref is None:
         ciel.log.error("Package lookup for %s in task without package" % key, "EXEC", logging.WARNING)
         return None
-    package_dict = retrieve_object_for_ref(task_record.package_ref, "pickle")
+    package_dict = retrieve_object_for_ref(task_record.package_ref, "pickle", task_record)
     try:
         return package_dict[key]
     except KeyError:
@@ -240,10 +248,10 @@ class BaseExecutor:
         pass
         
     @classmethod
-    def prepare_task_descriptor_for_execute(cls, task_descriptor, block_store):
+    def prepare_task_descriptor_for_execute(cls, task_descriptor, task_record, block_store):
         # Convert task_private from a reference to an object in here.
         try:
-            task_descriptor["task_private"] = retrieve_object_for_ref(task_descriptor["task_private"], BaseExecutor.TASK_PRIVATE_ENCODING)
+            task_descriptor["task_private"] = retrieve_object_for_ref(task_descriptor["task_private"], BaseExecutor.TASK_PRIVATE_ENCODING, task_record)
         except:
             ciel.log('Error retrieving task_private reference from task', 'BASE_EXECUTOR', logging.WARN, True)
             raise
@@ -279,7 +287,7 @@ class BaseExecutor:
         
 class OngoingFetch:
 
-    def __init__(self, ref, chunk_size, sole_consumer=False, make_sweetheart=False, must_block=False):
+    def __init__(self, ref, chunk_size, task_record, sole_consumer=False, make_sweetheart=False, must_block=False, can_accept_fd=False):
         self.lock = threading.Lock()
         self.condvar = threading.Condition(self.lock)
         self.bytes = 0
@@ -287,22 +295,30 @@ class OngoingFetch:
         self.chunk_size = chunk_size
         self.sole_consumer = sole_consumer
         self.make_sweetheart = make_sweetheart
+        self.task_record = task_record
         self.done = False
         self.success = None
         self.filename = None
+        self.fd = None
         self.completed_ref = None
         self.file_blocking = None
         # may_pipe = True because this class is only used for async operations.
         # The only current danger of pipes is that waiting for a transfer to complete might deadlock.
+        if can_accept_fd:
+            fd_callback = self.set_fd
+        else:
+            fd_callback = None
         self.fetch_ctx = fetch_ref_async(ref, 
                                          result_callback=self.result,
                                          progress_callback=self.progress, 
                                          reset_callback=self.reset,
                                          start_filename_callback=self.set_filename,
+                                         start_fd_callback=fd_callback,
                                          chunk_size=chunk_size,
                                          may_pipe=True,
                                          must_block=must_block,
-                                         sole_consumer=sole_consumer)
+                                         sole_consumer=sole_consumer,
+                                         task_record=task_record)
         
     def progress(self, bytes):
         with self.lock:
@@ -321,11 +337,18 @@ class OngoingFetch:
             self.done = True
             self.success = False
             self.condvar.notify_all()
-        self.client.cancel()
+        # XXX: This is causing failures. Is it a vestige?
+        #self.client.cancel()
 
     def set_filename(self, filename, is_blocking):
         with self.lock:
             self.filename = filename
+            self.file_blocking = is_blocking
+            self.condvar.notify_all()
+            
+    def set_fd(self, fd, is_blocking):
+        with self.lock:
+            self.fd = fd
             self.file_blocking = is_blocking
             self.condvar.notify_all()
 
@@ -335,6 +358,15 @@ class OngoingFetch:
                 self.condvar.wait()
             if self.filename is not None:
                 return (self.filename, self.file_blocking)
+            else:
+                return (None, None)
+        
+    def get_fd(self):
+        with self.lock:
+            while self.fd is None and self.filename is None and self.success is not False:
+                self.condvar.wait()
+            if self.fd is not None:
+                return (self.fd, self.file_blocking)
             else:
                 return (None, None)
 
@@ -379,8 +411,8 @@ class OngoingOutputWatch:
 
 class OngoingOutput:
 
-    def __init__(self, output_name, output_index, can_smart_subscribe, may_pipe, make_local_sweetheart, executor):
-        kwargs = {"may_pipe": may_pipe}
+    def __init__(self, output_name, output_index, can_smart_subscribe, may_pipe, make_local_sweetheart, can_accept_fd, executor):
+        kwargs = {"may_pipe": may_pipe, "can_use_fd": can_accept_fd}
         if can_smart_subscribe:
             kwargs["subscribe_callback"] = self.subscribe_output
         self.output_ctx = make_local_output(output_name, **kwargs)
@@ -391,6 +423,7 @@ class OngoingOutput:
         self.watch_chunk_size = None
         self.executor = executor
         self.filename = None
+        self.fd = None
 
     def __enter__(self):
         return self
@@ -409,6 +442,21 @@ class OngoingOutput:
             (self.filename, is_fd) = self.output_ctx.get_filename_or_fd()
             assert not is_fd
         return self.filename
+    
+    def get_filename_or_fd(self):
+        if self.filename is None and self.fd is None:
+            x, is_fd = self.output_ctx.get_filename_or_fd()
+            if is_fd:
+                self.fd = x
+                return (self.fd, True)
+            else:
+                self.filename = x
+                return (self.filename, False)
+        else:
+            if self.filename is None:
+                return (self.fd, True)
+            else:
+                return (self.filename, False)
     
     def get_size(self):
         assert not self.may_pipe
@@ -586,6 +634,11 @@ class ProcExecutor(BaseExecutor):
                 finished = self.json_event_loop(reader, writer)
             else:
                 raise BlameUserException('Unsupported protocol: %s' % self.process_record.protocol)
+        
+        except MissingInputException, mie:
+            self.process_pool.delete_process_record(self.process_record)
+            raise
+            
         except:
             ciel.log('Got unexpected error', 'PROC', logging.ERROR, True)
             finished = PROC_ERROR
@@ -633,13 +686,15 @@ class ProcExecutor(BaseExecutor):
         If reference is unavailable, raises a ReferenceUnavailableException."""
         ref = self.task_record.retrieve_ref(ref)
         if not accept_string:   
-            ctx = retrieve_filename_for_ref(ref, return_ctx=True)
+            ctx = retrieve_filename_for_ref(ref, self.task_record, return_ctx=True)
         else:
-            ctx = retrieve_file_or_string_for_ref(ref)
+            ctx = retrieve_file_or_string_for_ref(ref, self.task_record)
         if ctx.completed_ref is not None:
-            if make_sweetheart:
-                ctx.completed_ref = SW2_SweetheartReference.from_concrete(ctx.completed_ref, get_own_netloc())
+            #if make_sweetheart:
+            #    ctx.completed_ref = SW2_SweetheartReference.from_concrete(ctx.completed_ref, get_own_netloc())
             self.task_record.publish_ref(ctx.completed_ref)
+        if make_sweetheart:
+            self.task_record.publish_ref(SW2_SweetheartReference(ref.id, get_own_netloc()))
         return ctx.to_safe_dict()
         
     def publish_fetched_ref(self, fetch):
@@ -651,10 +706,26 @@ class ProcExecutor(BaseExecutor):
                 completed_ref = SW2_SweetheartReference.from_concrete(completed_ref, get_own_netloc())
             self.task_record.publish_ref(completed_ref)
         
-    def open_ref_async(self, ref, chunk_size, sole_consumer=False, make_sweetheart=False, must_block=False):
+    # Setting fd_socket_name implies you can accept a sendmsg'd FD.
+    def open_ref_async(self, ref, chunk_size, sole_consumer=False, make_sweetheart=False, must_block=False, fd_socket_name=None):
+        if not sendmsg_enabled:
+            fd_socket_name = None
+            ciel.log("Not using FDs directly: module 'sendmsg' not available", "EXEC", logging.WARNING)
         real_ref = self.task_record.retrieve_ref(ref)
-        new_fetch = OngoingFetch(real_ref, chunk_size, sole_consumer, make_sweetheart, must_block)
-        filename, file_blocking = new_fetch.get_filename()
+
+        new_fetch = OngoingFetch(real_ref, chunk_size, self.task_record, sole_consumer, make_sweetheart, must_block, can_accept_fd=(fd_socket_name is not None))
+        ret = {"sending_fd": False}
+        ret_fd = None
+        if fd_socket_name is not None:
+            fd, fd_blocking = new_fetch.get_fd()
+            if fd is not None:
+                ret["sending_fd"] = True
+                ret["blocking"] = fd_blocking
+                ret_fd = fd
+        if not ret["sending_fd"]:
+            filename, file_blocking = new_fetch.get_filename()
+            ret["filename"] = filename
+            ret["blocking"] = file_blocking
         if not new_fetch.done:
             self.context_manager.add_context(new_fetch)
             self.ongoing_fetches.append(new_fetch)
@@ -662,13 +733,18 @@ class ProcExecutor(BaseExecutor):
             self.publish_fetched_ref(new_fetch)
         # Definitions here: "done" means we're already certain that the producer has completed successfully.
         # "blocking" means that EOF, as and when it arrives, means what it says. i.e. it's a regular file and done, or a pipe-like thing.
-        ret = {"filename": filename, "done": new_fetch.done, "blocking": file_blocking, "size": new_fetch.bytes}
-        #ciel.log("Async fetch %s (chunk %d): initial status %d bytes, done=%s, blocking=%s" % (real_ref, chunk_size, ret["size"], ret["done"], ret["blocking"]), "EXEC", logging.INFO)
+        ret.update({"done": new_fetch.done, "size": new_fetch.bytes})
+        ciel.log("Async fetch %s (chunk %d): initial status %d bytes, done=%s, blocking=%s, sending_fd=%s" % (real_ref, chunk_size, ret["size"], ret["done"], ret["blocking"], ret["sending_fd"]), "EXEC", logging.INFO)
+
+        # XXX: adding this because the OngoingFetch isn't publishing the sweetheart correctly.        
+        if make_sweetheart:
+            self.task_record.publish_ref(SW2_SweetheartReference(ref.id, get_own_netloc()))
+
         if new_fetch.done:
             if not new_fetch.success:
                 ciel.log("Async fetch %s failed early" % ref, "EXEC", logging.WARNING)
                 ret["error"] = "EFAILED"
-        return ret
+        return (ret, ret_fd)
     
     def close_async_file(self, id, chunk_size):
         for fetch in self.ongoing_fetches:
@@ -732,21 +808,28 @@ class ProcExecutor(BaseExecutor):
         self.task_record.publish_ref(ref)
         return {"ref": ref}
 
-    def open_output(self, index, may_pipe=False, may_stream=False, make_local_sweetheart=False, can_smart_subscribe=False):
+    def open_output(self, index, may_pipe=False, may_stream=False, make_local_sweetheart=False, can_smart_subscribe=False, fd_socket_name=None):
         if may_pipe and not may_stream:
             raise Exception("Insane parameters: may_stream=False and may_pipe=True may well lead to deadlock")
         if index in self.ongoing_outputs:
             raise Exception("Tried to open output %d which was already open" % index)
+        if not sendmsg_enabled:
+            ciel.log("Not using FDs directly: module 'sendmsg' not available", "EXEC", logging.WARNING)
+            fd_socket_name = None
         output_name = self.expected_outputs[index]
-        output_ctx = OngoingOutput(output_name, index, can_smart_subscribe, may_pipe, make_local_sweetheart, self)
+        can_accept_fd = (fd_socket_name is not None)
+        output_ctx = OngoingOutput(output_name, index, can_smart_subscribe, may_pipe, make_local_sweetheart, can_accept_fd, self)
         self.ongoing_outputs[index] = output_ctx
         self.context_manager.add_context(output_ctx)
         if may_stream:
             ref = output_ctx.get_stream_ref()
             self.task_record.prepublish_refs([ref])
-        filename = output_ctx.get_filename()
-        return {"filename": filename}
-    
+        x, is_fd = output_ctx.get_filename_or_fd()
+        if is_fd:
+            return ({"sending_fd": True}, x)
+        else:
+            return ({"sending_fd": False, "filename": x}, None)
+
     def open_profile_output(self):
         if self.profiling_output is not None:
             raise Exception("Tried to open profiling output which was already open")
@@ -804,6 +887,7 @@ class ProcExecutor(BaseExecutor):
                 
             #ciel.log('Method is %s' % repr(method), 'PROC', logging.INFO)
             response = None
+            response_fd = None
             
             try:
                 if method == 'open_ref':
@@ -824,7 +908,7 @@ class ProcExecutor(BaseExecutor):
                         return PROC_ERROR
             
                     try:
-                        response = self.open_ref_async(**args)
+                        response, response_fd = self.open_ref_async(**args)
                     except ReferenceUnavailableException:
                         response = {"error": "EWOULDBLOCK"}
                         
@@ -868,7 +952,7 @@ class ProcExecutor(BaseExecutor):
                             ciel.log('Missing argument key: i (index), and >1 expected output so could not infer index', 'PROC', logging.ERROR, False)
                             return PROC_ERROR
                     
-                    response = self.open_output(**args)
+                    response, response_fd = self.open_output(**args)
                         
                 elif method == 'close_output':
     
@@ -930,6 +1014,10 @@ class ProcExecutor(BaseExecutor):
                     ciel.log('Invalid method: %s' % method, 'PROC', logging.WARN, False)
                     return PROC_ERROR
 
+            except MissingInputException, mie:
+                ciel.log("Task died due to missing input", 'PROC', logging.WARN)
+                raise
+
             except:
                 ciel.log('Error during method handling in JSON event loop', 'PROC', logging.ERROR, True)
                 return PROC_ERROR
@@ -938,6 +1026,13 @@ class ProcExecutor(BaseExecutor):
                 if response is not None:
                     with self.transmit_lock:
                         write_framed_json((method, response), writer)
+                if response_fd is not None:
+                    socket_name = args["fd_socket_name"]
+                    sock = socket.socket(socket.AF_UNIX)
+                    sock.connect(socket_name)
+                    sendmsg.sendmsg(fd=sock.fileno(), data="FD", ancillary=(socket.SOL_SOCKET, sendmsg.SCM_RIGHTS, struct.pack("i", response_fd)))
+                    os.close(response_fd)
+                    sock.close()
             except:
                 ciel.log('Error writing response in JSON event loop', 'PROC', logging.WARN, True)
                 return PROC_ERROR
@@ -1046,6 +1141,7 @@ class Java2Executor(ProcExecutor):
             task_descriptor["dependencies"].append(object_ref)
         if args is not None:
             task_descriptor["task_private"]["args"] = args
+        add_package_dep(parent_task_record.package_ref, task_descriptor)
         
         return ProcExecutor.build_task_descriptor(task_descriptor, parent_task_record, n_extra_outputs=0, is_tail_spawn=is_tail_spawn, accept_ref_list_for_single=True, **kwargs)
         
@@ -1225,9 +1321,9 @@ class SimpleExecutor(BaseExecutor):
         self.task_record = task_record
         self.task_id = task_descriptor["task_id"]
         self.output_ids = task_descriptor["expected_outputs"]
-        self.output_refs = [None for i in range(len(self.output_ids))]
+        self.output_refs = [None for _ in range(len(self.output_ids))]
         self.succeeded = False
-        self.args = retrieve_object_for_ref(task_private["simple_exec_args"], "pickle")
+        self.args = retrieve_object_for_ref(task_private["simple_exec_args"], "pickle", self.task_record)
 
         try:
             self.debug_opts = self.args['debug_options']
@@ -1301,6 +1397,10 @@ class ProcessRunningExecutor(SimpleExecutor):
             self.eager_fetch = self.args['eager_fetch']
         except KeyError:
             self.eager_fetch = False
+        try:
+            self.stream_chunk_size = self.args['stream_chunk_size']
+        except KeyError:
+            self.stream_chunk_size = 67108864
 
         try:
             self.make_sweetheart = self.args['make_sweetheart']
@@ -1313,9 +1413,11 @@ class ProcessRunningExecutor(SimpleExecutor):
         push_threads = None
 
         if self.eager_fetch:
-            file_inputs = retrieve_filenames_for_refs(self.input_refs)
+            file_inputs = retrieve_filenames_for_refs(self.input_refs, self.task_record)
         else:
-            push_threads = [OngoingFetch(ref, chunk_size=67108864, must_block=True) for ref in self.input_refs]
+
+            push_threads = [OngoingFetch(ref, chunk_size=self.stream_chunk_size, task_record=self.task_record, must_block=True) for ref in self.input_refs]
+
             for thread in push_threads:
                 self.context_mgr.add_context(thread)
 
@@ -1336,7 +1438,7 @@ class ProcessRunningExecutor(SimpleExecutor):
                         assert is_blocking is True
                     file_inputs.append(filename)
             
-            file_outputs = [filename for (filename, is_fd) in (ctx.get_filename_or_fd() for ctx in out_file_contexts)]
+            file_outputs = [filename for (filename, _) in (ctx.get_filename_or_fd() for ctx in out_file_contexts)]
             
             self.proc = self.start_process(file_inputs, file_outputs)
             add_running_child(self.proc)
@@ -1611,7 +1713,7 @@ class JavaExecutor(FilenamesOnStdinExecutor):
         ciel.log.error("Running Java executor for class: %s" % self.class_name, "JAVA", logging.INFO)
         ciel.engine.publish("worker_event", "Java: fetching JAR")
 
-        self.jar_filenames = retrieve_filenames_for_refs(self.jar_refs)
+        self.jar_filenames = retrieve_filenames_for_refs(self.jar_refs, self.task_record)
 
     def get_process_args(self):
         cp = os.getenv('CLASSPATH')
@@ -1651,7 +1753,7 @@ class DotNetExecutor(FilenamesOnStdinExecutor):
 
         ciel.log.error("Running Dotnet executor for class: %s" % self.class_name, "DOTNET", logging.INFO)
         ciel.engine.publish("worker_event", "Dotnet: fetching DLLs")
-        self.dll_filenames = retrieve_filenames_for_refs(self.dll_refs)
+        self.dll_filenames = retrieve_filenames_for_refs(self.dll_refs, self.task_record)
 
     def get_process_args(self):
 
@@ -1688,7 +1790,7 @@ class CExecutor(FilenamesOnStdinExecutor):
 
         ciel.log.error("Running C executor for entry point: %s" % self.entry_point_name, "CEXEC", logging.INFO)
         ciel.engine.publish("worker_event", "C-exec: fetching SOs")
-        self.so_filenames = retrieve_filenames_for_refs(self.so_refs)
+        self.so_filenames = retrieve_filenames_for_refs(self.so_refs, self.task_record)
 
     def get_process_args(self):
 

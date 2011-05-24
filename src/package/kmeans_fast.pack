@@ -6,7 +6,8 @@
 	    	    "class_name" : "skywriting.examples.kmeans.KMeansInitTask",
 	    	    "jar_lib" : [{"__package__": "kmeans-jar"}],
 		    "args" : [1600, 10, 10, 2, 0.000001, true],
-		    "n_outputs" : 1}
+		    "n_outputs" : 1,
+		    "profiling_enabled": true}
 	  },
  "result": [{"__decode_ref__": "noop"}]
 }

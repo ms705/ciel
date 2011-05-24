@@ -6,7 +6,8 @@
 	    	    "class_name" : "skywriting.examples.tests.java2.InitSpawnTaskTest",
 	    	    "jar_lib" : [{"__package__": "tests-jar"}],
 		    "args" : [42],
-		    "n_outputs" : 1}
+		    "n_outputs" : 1,
+                    "profiling_enabled" : true}
 	  },
  "result": [{"__decode_ref__": "noop"}]
 }

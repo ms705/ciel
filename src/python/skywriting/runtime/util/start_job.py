@@ -12,11 +12,13 @@ from skywriting.runtime.util.sw_pprint import sw_pprint
 
 from shared.references import SWReferenceJSONEncoder,json_decode_object_hook,\
     SW2_FutureReference, SWDataValue, SWErrorReference,\
-    SW2_SocketStreamReference, SW2_StreamReference, SW2_ConcreteReference
+    SW2_SocketStreamReference, SW2_StreamReference, SW2_ConcreteReference,\
+    build_reference_from_tuple
 from skywriting.runtime.object_cache import retrieve_object_for_ref, decoders
 from optparse import OptionParser
 from skywriting.runtime.block_store import get_fetch_urls_for_ref
 from StringIO import StringIO
+import sys
 
 http = httplib2.Http()
 
@@ -44,13 +46,28 @@ def ref_of_string(val, master_uri):
     (_, content) = http.request(master_data_uri, "POST", val)
     return simplejson.loads(content, object_hook=json_decode_object_hook)
     
-def ref_of_object(val, package_path, master_uri):
-    if "filename" not in val:
+def ref_of_object(key, val, package_path, master_uri):
+    if "__ref__" in val:
+        return build_reference_from_tuple(val['__ref__'])
+    if "filename" not in val and "urls" not in val:
         raise Exception("start_job can't handle resources that aren't files yet; package entries must have a 'filename' member")
-    if not os.path.isabs(val["filename"]):
+    if "filename" in val and not os.path.isabs(val["filename"]):
         # Construct absolute path by taking it as relative to package descriptor
         val["filename"] = os.path.join(package_path, val["filename"])
-    if "index" in val and val["index"]:
+    if "urlindex" in val and val["urlindex"]:
+        try:
+            replication = val["replication"]
+        except KeyError:
+            replication = 3
+        try:
+            repeat = val["repeat"]
+        except KeyError:
+            repeat = 1
+        if 'urls' in val:
+            return load.do_uploads(master_uri, [], urllist=val["urls"], do_urls=True, replication=replication, repeat=repeat)
+        else:
+            return load.do_uploads(master_uri, [val["filename"]], do_urls=True, replication=replication)
+    elif "index" in val and val["index"]:
         return load.do_uploads(master_uri, [val["filename"]])
     else:
         with open(val["filename"], "r") as infile:
@@ -64,7 +81,7 @@ def task_descriptor_for_package_and_initial_task(package_dict, start_handler, st
             return args[value["__args__"]]
         except IndexError:
             if "default" in value:
-                print "Positional argument", value["__args__"], "not specified; using default", value["default"]
+                print >>sys.stderr, "Positional argument", value["__args__"], "not specified; using default", value["default"]
                 return value["default"]
             else:
                 raise Exception("Package requires at least %d args" % (value["__args__"] + 1))
@@ -74,7 +91,7 @@ def task_descriptor_for_package_and_initial_task(package_dict, start_handler, st
             return os.environ[value["__env__"]]
         except KeyError:
             if "default" in value:
-                print "Environment variable", value["__env__"], "not specified; using default", value["default"]
+                print >>sys.stderr, "Environment variable", value["__env__"], "not specified; using default", value["default"]
                 return value["default"]
             else:
                 raise Exception("Package requires environment variable '%s'" % value["__env__"])
@@ -84,7 +101,9 @@ def task_descriptor_for_package_and_initial_task(package_dict, start_handler, st
     package_dict = resolve_vars(package_dict, env_and_args_callbacks)
     start_args = resolve_vars(start_args, env_and_args_callbacks)
 
-    submit_package_dict = dict([(k, ref_of_object(v, package_path, master_uri)) for (k, v) in package_dict.items()])
+    submit_package_dict = dict([(k, ref_of_object(k, v, package_path, master_uri)) for (k, v) in package_dict.items()])
+    for key, ref in submit_package_dict.items():
+        print >>sys.stderr, key, '-->', simplejson.dumps(ref, cls=SWReferenceJSONEncoder)
     package_ref = ref_of_string(pickle.dumps(submit_package_dict), master_uri)
 
     resolved_args = resolve_vars(start_args, {"__package__": lambda x: submit_package_dict[x["__package__"]]})
@@ -95,8 +114,8 @@ def submit_job_with_package(package_dict, start_handler, start_args, job_options
     
     task_descriptor = task_descriptor_for_package_and_initial_task(package_dict, start_handler, start_args, package_path, master_uri, args)
 
-    print "Submitting descriptor:"
-    sw_pprint(task_descriptor, indent=2)
+    #print "Submitting descriptor:"
+    #sw_pprint(task_descriptor, indent=2)
 
     payload = {"root_task" : task_descriptor, "job_options" : job_options}
 
@@ -104,11 +123,26 @@ def submit_job_with_package(package_dict, start_handler, start_args, job_options
     (_, content) = http.request(master_task_submit_uri, "POST", simplejson.dumps(payload, cls=SWReferenceJSONEncoder))
     return simplejson.loads(content)
 
-def await_job(jobid, master_uri):
+def await_job(jobid, master_uri, timeout=None):
     notify_url = urlparse.urljoin(master_uri, "control/job/%s/completion" % jobid)
-    (_, content) = http.request(notify_url)
-    completion_result = simplejson.loads(content, object_hook=json_decode_object_hook)
-    if "error" in completion_result:
+    if timeout is not None:
+        payload = simplejson.dumps({'timeout' : timeout})
+    else:
+        payload = None
+    completion_result = None
+    for i in range(5):
+        try:
+            (_, content) = http.request(notify_url, "GET" if timeout is None else "POST", body=payload)
+            completion_result = simplejson.loads(content, object_hook=json_decode_object_hook)
+            break
+        except:
+            print >>sys.stderr, "Decode failed; retrying fetch..."
+            pass
+
+    if timeout is not None:
+        return completion_result
+
+    if completion_result is not None and "error" in completion_result:
         raise Exception("Job failure: %s" % completion_result["error"])
     else:
         return completion_result["result_ref"]
@@ -117,7 +151,7 @@ def external_get_real_ref(ref, jobid, master_uri):
     fetch_url = urlparse.urljoin(master_uri, "control/ref/%s/%s" % (jobid, ref.id))
     _, content = httplib2.Http().request(fetch_url)
     real_ref = simplejson.loads(content, object_hook=json_decode_object_hook)
-    print "Resolved", ref, "-->", real_ref
+    print >>sys.stderr, "Resolved", ref, "-->", real_ref
     return real_ref 
     
 def simple_retrieve_object_for_ref(ref, decoder, jobid, master_uri):
@@ -126,7 +160,7 @@ def simple_retrieve_object_for_ref(ref, decoder, jobid, master_uri):
     if isinstance(ref, SW2_FutureReference) or isinstance(ref, SW2_StreamReference) or isinstance(ref, SW2_SocketStreamReference):
         ref = external_get_real_ref(ref, jobid, master_uri)
     if isinstance(ref, SWDataValue):
-        return retrieve_object_for_ref(ref, decoder)
+        return retrieve_object_for_ref(ref, decoder, None)
     elif isinstance(ref, SW2_ConcreteReference):
         urls = get_fetch_urls_for_ref(ref)
         _, content = httplib2.Http().request(urls[0])
@@ -169,7 +203,7 @@ def recursive_decode(to_decode, template, jobid, master_uri):
 def main():
 
     parser = OptionParser()
-    parser.add_option("-m", "--master", action="store", dest="master", help="Master URI", metavar="MASTER", default=os.getenv("SW_MASTER"))
+    parser.add_option("-m", "--master", action="store", dest="master", help="Master URI", metavar="MASTER", default=os.getenv("CIEL_MASTER"))
     
     (options, args) = parser.parse_args()
     master_uri = options.master
@@ -218,3 +252,54 @@ def main():
             print "Failed to decode due to exception", repr(e)
             return reflist
         
+def submit():
+    """Toned-down version of the above for automation purposes."""        
+    parser = OptionParser()
+    parser.add_option("-m", "--master", action="store", dest="master", help="Master URI", metavar="MASTER", default=os.getenv("CIEL_MASTER"))
+    
+    (options, args) = parser.parse_args()
+    master_uri = options.master
+
+    if master_uri is None or master_uri == "":
+        raise Exception("Must specify a master with -m or SW_MASTER")
+    
+    with open(args[0], "r") as package_file:
+        job_dict = simplejson.load(package_file)
+
+    package_dict = job_dict.get("package",{})
+    start_dict = job_dict["start"]
+    start_handler = start_dict["handler"]
+    start_args = start_dict["args"]
+    try:
+        job_options = job_dict["options"]
+    except KeyError:
+        job_options = {}
+    
+
+    (package_path, _) = os.path.split(args[0])
+
+    new_job = submit_job_with_package(package_dict, start_handler, start_args, job_options, package_path, master_uri, args[1:])
+    
+    job_browse_url = urlparse.urljoin(master_uri, "control/browse/job/%s" % new_job['job_id'])
+    print >>sys.stderr, "Information available at ", job_browse_url
+
+    print new_job['job_id']
+
+def wait():
+    """Toned-down version of the above for automation purposes."""        
+    parser = OptionParser()
+    parser.add_option("-m", "--master", action="store", dest="master", help="Master URI", metavar="MASTER", default=os.getenv("CIEL_MASTER"))
+    parser.add_option("-t", "--timeout", action="store", dest="timeout", help="Timeout", metavar="DURATION", default=10)
+    
+    (options, args) = parser.parse_args()
+
+    master_uri = options.master
+
+    if master_uri is None or master_uri == "":
+        raise Exception("Must specify a master with -m or SW_MASTER")
+
+    result = await_job(args[0], master_uri, options.timeout)
+
+    print >>sys.stderr, "Job done?", result
+
+    return result
