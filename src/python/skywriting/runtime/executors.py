@@ -626,7 +626,10 @@ class ProcExecutor(BaseExecutor):
         # start profiling, if enabled
         if task_private['profiling_enabled']:
             self.profiler = profiler.SarProfiler(self.block_store)
-            self.profiler.start(self.open_profile_output()['filename'])
+            self.profile_output = self.open_profile_output()
+            self.profiler.start(self.profile_output.get_filename())
+        else:
+            self.profiler = None
 
         write_framed_json(("start_task", task_private), writer)
 
@@ -647,8 +650,10 @@ class ProcExecutor(BaseExecutor):
             finished = PROC_ERROR
         
         # finished, so stop profiling
-        if task_private['profiling_enabled']:
+        if self.profiler is not None:
             self.profiler.stop()
+            self.profile_output.close()
+            self.task_record.add_additional_profiling("profiler_data", self.profile_output.get_completed_ref())
         
         if finished == PROC_EXITED:
             
@@ -834,14 +839,9 @@ class ProcExecutor(BaseExecutor):
             return ({"sending_fd": False, "filename": x}, None)
 
     def open_profile_output(self):
-        if self.profiling_output is not None:
-            raise Exception("Tried to open profiling output which was already open")
-        output_name = uuid.uuid4()
+        output_name = str(uuid.uuid4())
         output_ctx = EphemeralOutput(output_name, self)
-        self.profiling_output = output_ctx
-        self.context_manager.add_context(output_ctx)
-        filename = output_ctx.get_filename()
-        return {"filename": filename}
+        return output_ctx
     
     def stop_output(self, index):
         self.context_manager.remove_context(self.ongoing_outputs[index])
