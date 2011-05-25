@@ -40,7 +40,7 @@ def task_link(job, task):
     return '<a href="/control/browse/task/%s/%s">%s</a>' % (job.id, task.task_id, task.task_id)
 
 def pgraph_link(job, task):
-    return '<a href="/control/browse/task/%s/%s/pgraph">Graph</a>' % (job.id, task.task_id, task.task_id)
+    return '<a href="/control/browse/perf/%s/%s">Graph</a>' % (job.id, task.task_id)
 
 def swbs_link(netloc, ref_id):
     return '<a href="http://%s/data/%s">Link</a>' % (netloc, ref_id)
@@ -69,6 +69,7 @@ class WebBrowserRoot:
         self.job = JobBrowserRoot(job_pool)
         self.task = TaskBrowserRoot(job_pool)
         self.ref = RefBrowserRoot(job_pool)
+        self.perf = PerformanceBrowserRoot(job_pool)
         
 class JobBrowserRoot:
 
@@ -112,15 +113,13 @@ class JobBrowserRoot:
         job_string += '</table></body></html>'
         return job_string
 
-class TaskBrowserRoot:
+class PerformanceBrowserRoot:
     
     def __init__(self, job_pool):
         self.job_pool = job_pool
         
     @cherrypy.expose
-    def default(self, job_id, task_id, attr=None):
-        
-        #attr = None
+    def default(self, job_id, task_id):
         
         try:
             job = self.job_pool.get_job_by_id(job_id)
@@ -132,36 +131,52 @@ class TaskBrowserRoot:
         except KeyError:
             raise HTTPError(404)
         
-        if attr is None:
-            
-            task_string = header('Task Browser', job_id)
-            task_string += '<table>'
-            task_string += table_row('ID', task.task_id)
-            task_string += table_row('State', TASK_STATE_NAMES[task.state])
-            for worker in [task.get_worker()]:
-                task_string += table_row('Worker', worker.netloc if worker is not None else None)
-            #if task.state is TASK_COMMITTED:
-            #    task_string += table_row('Profiling Output', pgraph_link(job,task) )
-            task_string += span_row('Dependencies')
-            for local_id, ref in task.dependencies.items():
-                task_string += table_row(local_id, ref_link(job, ref))
-            task_string += span_row('Outputs')
-            for i, output_id in enumerate(task.expected_outputs):
-                task_string += table_row(i, ref_id_link(job, output_id))
-            task_string += span_row('History')
-            for t, name in task.history:
-                task_string += table_row(time.mktime(t.timetuple()) + t.microsecond / 1e6, name)
-            if len(task.children) > 0:
-                task_string += span_row('Children')
-                for i, child in enumerate(task.children):
-                    task_string += table_row(i, '%s</td><td>%s</td><td>%s' % (task_link(job, child), child.handler, TASK_STATE_NAMES[child.state]))
-            task_string += '</table></body></html>'
-            return task_string
+        filename = make_graph(task)
+        return serve_file(filename)
+
+
+class TaskBrowserRoot:
+    
+    def __init__(self, job_pool):
+        self.job_pool = job_pool
         
-        elif attr == "pgraph":
-            
-            filename = make_graph(task)
-            return serve_file(filename)
+    @cherrypy.expose
+    def default(self, job_id, task_id):
+        
+        try:
+            job = self.job_pool.get_job_by_id(job_id)
+        except KeyError:
+            raise HTTPError(404)
+        
+        try:
+            task = job.task_graph.get_task(task_id)
+        except KeyError:
+            raise HTTPError(404)
+        
+        task_string = header('Task Browser', job_id)
+        task_string += '<table>'
+        task_string += table_row('ID', task.task_id)
+        task_string += table_row('State', TASK_STATE_NAMES[task.state])
+        for worker in [task.get_worker()]:
+            task_string += table_row('Worker', worker.netloc if worker is not None else None)
+        if task.state is TASK_COMMITTED:
+            task_string += table_row('Profiling Output', pgraph_link(job,task) )
+        task_string += span_row('Dependencies')
+        for local_id, ref in task.dependencies.items():
+            task_string += table_row(local_id, ref_link(job, ref))
+        task_string += span_row('Outputs')
+        for i, output_id in enumerate(task.expected_outputs):
+            task_string += table_row(i, ref_id_link(job, output_id))
+        task_string += span_row('History')
+        for t, name in task.history:
+            task_string += table_row(time.mktime(t.timetuple()) + t.microsecond / 1e6, name)
+        if len(task.children) > 0:
+            task_string += span_row('Children')
+            for i, child in enumerate(task.children):
+                task_string += table_row(i, '%s</td><td>%s</td><td>%s' % (task_link(job, child), child.handler, TASK_STATE_NAMES[child.state]))
+        task_string += '</table></body></html>'
+        return task_string
+
 
 class RefBrowserRoot:
     
