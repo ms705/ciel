@@ -13,10 +13,13 @@
 # OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 from skywriting.runtime.master.job_pool import JOB_STATE_NAMES
 from cherrypy._cperror import HTTPError
-from skywriting.runtime.task import TASK_STATES, TASK_STATE_NAMES
+from skywriting.runtime.task import TASK_STATES, TASK_STATE_NAMES,\
+    TASK_COMMITTED
+from skywriting.runtime.master.profile_view import make_graph
 import cherrypy
 import time
 from shared.references import SWDataValue, decode_datavalue
+from cherrypy.lib.static import serve_file
 
 def table_row(key, *args):
     return '<tr><td><b>%s</b></td>' % key + ''.join(['<td>%s</td>' % str(x) for x in args]) + '</tr>'
@@ -36,8 +39,29 @@ def ref_id_link(job, ref_id):
 def task_link(job, task):
     return '<a href="/control/browse/task/%s/%s">%s</a>' % (job.id, task.task_id, task.task_id)
 
+def pgraph_link(job, task):
+    return '<a href="/control/browse/task/%s/%s/pgraph">Graph</a>' % (job.id, task.task_id, task.task_id)
+
 def swbs_link(netloc, ref_id):
     return '<a href="http://%s/data/%s">Link</a>' % (netloc, ref_id)
+
+def header(title=None, jobid=None):
+    html = '<html>'
+    html += '<head>'
+    if title is not None:
+        html += '<title>Job Browser</title>'
+    html += '<style>html { margin: 0px; } body { margin: 0px; font-family: Helvetica, sans-serif; font-size: 1.0em; } .pageheader {' \
+    'height: 80px; width: 100%; background: #0d259e url(\'/data/skyweb/ciel-logo.png\') no-repeat bottom left;' \
+    'font-family: Helvetica; font-weight: bold; font-size: 20pt; color: #ffffff; overflow: hidden; text-align: right; margin-bottom: 5px;' \
+    '} .pageheader a { color: white; font-size: 12pt; } </style>'
+    html += '</head>'
+    html += '<body><div class=\"pageheader\">%s<br /><a href=\"/control/browse/job/">All jobs</a> ' % title
+    if jobid is not None:
+        html += '<a href=\"/control/browse/job/%s\">Job home</a>' % jobid
+    html += '</div>'
+    
+    return html
+
 
 class WebBrowserRoot:
     
@@ -54,8 +78,8 @@ class JobBrowserRoot:
     @cherrypy.expose
     def index(self):
         jobs = self.job_pool.get_all_job_ids()
-        job_string = '<html><head><title>Job Browser</title></head>'
-        job_string += '<body><table>'
+        job_string = header('Job Browser')
+        job_string += '<table>'
         for job_id in jobs:
             job = self.job_pool.get_job_by_id(job_id)
             job_string += table_row('Job', job_link(job), JOB_STATE_NAMES[job.state])
@@ -69,8 +93,8 @@ class JobBrowserRoot:
         except KeyError:
             raise HTTPError(404)
 
-        job_string = '<html><head><title>Job Browser</title></head>'
-        job_string += '<body><table>'
+        job_string = header('Job Browser', job_id)
+        job_string += '<table>'
         job_string += table_row('ID', job.id)
         job_string += table_row('Root task', task_link(job, job.root_task))
         job_string += table_row('State', JOB_STATE_NAMES[job.state])
@@ -94,7 +118,9 @@ class TaskBrowserRoot:
         self.job_pool = job_pool
         
     @cherrypy.expose
-    def default(self, job_id, task_id):
+    def default(self, job_id, task_id, attr=None):
+        
+        #attr = None
         
         try:
             job = self.job_pool.get_job_by_id(job_id)
@@ -106,27 +132,36 @@ class TaskBrowserRoot:
         except KeyError:
             raise HTTPError(404)
         
-        task_string = '<html><head><title>Task Browser</title></head>'
-        task_string += '<body><table>'
-        task_string += table_row('ID', task.task_id)
-        task_string += table_row('State', TASK_STATE_NAMES[task.state])
-        for worker in [task.get_worker()]:
-            task_string += table_row('Worker', worker.netloc if worker is not None else None)
-        task_string += span_row('Dependencies')
-        for local_id, ref in task.dependencies.items():
-            task_string += table_row(local_id, ref_link(job, ref))
-        task_string += span_row('Outputs')
-        for i, output_id in enumerate(task.expected_outputs):
-            task_string += table_row(i, ref_id_link(job, output_id))
-        task_string += span_row('History')
-        for t, name in task.history:
-            task_string += table_row(time.mktime(t.timetuple()) + t.microsecond / 1e6, name)
-        if len(task.children) > 0:
-            task_string += span_row('Children')
-            for i, child in enumerate(task.children):
-                task_string += table_row(i, '%s</td><td>%s</td><td>%s' % (task_link(job, child), child.handler, TASK_STATE_NAMES[child.state]))
-        task_string += '</table></body></html>'
-        return task_string
+        if attr is None:
+            
+            task_string = header('Task Browser', job_id)
+            task_string += '<table>'
+            task_string += table_row('ID', task.task_id)
+            task_string += table_row('State', TASK_STATE_NAMES[task.state])
+            for worker in [task.get_worker()]:
+                task_string += table_row('Worker', worker.netloc if worker is not None else None)
+            #if task.state is TASK_COMMITTED:
+            #    task_string += table_row('Profiling Output', pgraph_link(job,task) )
+            task_string += span_row('Dependencies')
+            for local_id, ref in task.dependencies.items():
+                task_string += table_row(local_id, ref_link(job, ref))
+            task_string += span_row('Outputs')
+            for i, output_id in enumerate(task.expected_outputs):
+                task_string += table_row(i, ref_id_link(job, output_id))
+            task_string += span_row('History')
+            for t, name in task.history:
+                task_string += table_row(time.mktime(t.timetuple()) + t.microsecond / 1e6, name)
+            if len(task.children) > 0:
+                task_string += span_row('Children')
+                for i, child in enumerate(task.children):
+                    task_string += table_row(i, '%s</td><td>%s</td><td>%s' % (task_link(job, child), child.handler, TASK_STATE_NAMES[child.state]))
+            task_string += '</table></body></html>'
+            return task_string
+        
+        elif attr == "pgraph":
+            
+            filename = make_graph(task)
+            return serve_file(filename)
 
 class RefBrowserRoot:
     
@@ -146,8 +181,8 @@ class RefBrowserRoot:
         except KeyError:
             raise HTTPError(404)
 
-        ref_string = '<html><head><title>Task Browser</title></head>'
-        ref_string += '<body><table>'
+        ref_string = header('Task Browser', job_id)
+        ref_string += '<table>'
         ref_string += table_row('ID', ref_id)
         ref_string += table_row('Ref type', ref.__class__.__name__)
         if isinstance(ref, SWDataValue):

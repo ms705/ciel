@@ -93,7 +93,7 @@ class DynamicTaskGraph:
         
         # Now update the reference table to account for the new task.
         # We will need to reduce this task if any of its outputs have consumers. 
-        should_reduce = False
+        should_reduce = task.strict
         for output_id in task.expected_outputs:
             ref_table_entry = self.publish(SW2_FutureReference(output_id), task)
             should_reduce = should_reduce or ref_table_entry.has_consumers()

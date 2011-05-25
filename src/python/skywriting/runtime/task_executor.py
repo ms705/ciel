@@ -154,6 +154,7 @@ class TaskExecutionRecord:
         self.start_time = None
         self.finish_time = None
         self.fetches = []
+        self.additional_profiling = {}
         
     def as_timestamp(self, t):
         return time.mktime(t.timetuple()) + t.microsecond / 1e6
@@ -172,8 +173,12 @@ class TaskExecutionRecord:
                 fetches[netloc] = size
 
         profile['FETCHED'] = fetches
+        profile.update(self.additional_profiling)
         
         return profile
+    
+    def add_additional_profiling(self, key, value):
+        self.additional_profiling[key] = value
         
     def add_completed_fetch(self, url, size):
         self.fetches.append((url, size))

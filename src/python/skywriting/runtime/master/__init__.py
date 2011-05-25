@@ -95,7 +95,7 @@ def master_main(options):
     cherrypy_conf = dict()
     
     if options.staticbase is not None:
-        cherrypy_conf["/skyweb"] = { "tools.staticdir.on": True, "tools.staticdir.dir": options.staticbase }
+        cherrypy_conf["/data/skyweb"] = { "tools.staticdir.on": True, "tools.staticdir.dir": options.staticbase }
 
     app = cherrypy.tree.mount(root, "", cherrypy_conf)
     lighty_conf_template = options.lighty_conf

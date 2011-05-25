@@ -257,7 +257,7 @@ class BaseExecutor:
             raise
         
     @classmethod
-    def build_task_descriptor(cls, task_descriptor, parent_task_record):
+    def build_task_descriptor(cls, task_descriptor, parent_task_record, strict=False):
         
         if parent_task_record.task_descriptor is not None:
             try:
@@ -271,6 +271,9 @@ class BaseExecutor:
                     ciel.log('Profiling set to %s in parent task' % val, 'PROFILER', logging.INFO)
                 except:
                     pass
+        
+        if strict:
+            task_descriptor['strict'] = True
         
         # Convert task_private to a reference in here. 
         task_private_id = ("%s:_private" % task_descriptor["task_id"])
@@ -1359,7 +1362,7 @@ class SimpleExecutor(BaseExecutor):
         if self.profiler is not None:
             self.profiler.stop()
             self.profile_output.close()
-            print self.profile_output.get_completed_ref()
+            self.task_record.add_additional_profiling("profiler_data", self.profile_output.get_completed_ref())
         
         self._cleanup_task()
     

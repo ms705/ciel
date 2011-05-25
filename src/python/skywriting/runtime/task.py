@@ -35,7 +35,7 @@ for (name, number) in TASK_STATES.items():
 
 class TaskPoolTask:
     
-    def __init__(self, task_id, parent_task, handler, inputs, dependencies, expected_outputs, task_private=None, state=TASK_CREATED, job=None, taskset=None, worker_private=None, workers=[], scheduling_class=None, type=None):
+    def __init__(self, task_id, parent_task, handler, inputs, dependencies, expected_outputs, task_private=None, state=TASK_CREATED, job=None, taskset=None, worker_private=None, workers=[], scheduling_class=None, type=None, strict=False):
         self.task_id = task_id
         
         # Task creation graph.
@@ -81,6 +81,8 @@ class TaskPoolTask:
         self.current_attempt = 0
         
         self.profiling = {}
+
+        self.strict = strict
 
     def __str__(self):
         return 'TaskPoolTask(%s)' % self.task_id
@@ -285,6 +287,11 @@ def build_taskpool_task_from_descriptor(task_descriptor, parent_task=None, tasks
         workers = []
 
     try:
+        strict = task_descriptor['strict']
+    except KeyError:
+        strict = False
+
+    try:
         scheduling_class = task_descriptor['scheduling_class']
     except KeyError:
         if parent_task is not None:
@@ -300,4 +307,4 @@ def build_taskpool_task_from_descriptor(task_descriptor, parent_task=None, tasks
     
     state = TASK_CREATED
     
-    return TaskPoolTask(task_id, parent_task, handler, inputs, dependencies, expected_outputs, task_private, state, job, taskset, worker_private, workers, scheduling_class, type)
+    return TaskPoolTask(task_id, parent_task, handler, inputs, dependencies, expected_outputs, task_private, state, job, taskset, worker_private, workers, scheduling_class, type, strict)
