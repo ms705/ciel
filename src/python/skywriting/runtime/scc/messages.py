@@ -7,7 +7,7 @@ Created on 12 Mar 2011
 from ctypes import *
 from struct import *
 
-from skywriting.runtime.references import SWReferenceJSONEncoder
+from shared.references import SWReferenceJSONEncoder
 import simplejson
 
 class MESSAGE(Structure):
