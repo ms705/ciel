@@ -287,7 +287,7 @@ class WorkerPool:
     def reap_dead_workers(self):
         if not self.is_stopping:
             for worker in self.workers.values():
-                if worker.failed:
+                if worker.failed or worker.last_ping is None:
                     continue
                 if (worker.last_ping + datetime.timedelta(seconds=10)) < datetime.datetime.now():
                     failed_worker = worker
