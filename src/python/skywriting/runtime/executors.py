@@ -1288,7 +1288,11 @@ class SimpleExecutor(BaseExecutor):
         task_descriptor["dependencies"].append(args_ref)
         task_descriptor["task_private"]["simple_exec_args"] = args_ref
         
-        BaseExecutor.build_task_descriptor(task_descriptor, parent_task_record)
+        if 'strict' in args:
+            strict = args['strict']
+        else:
+            strict = False
+        BaseExecutor.build_task_descriptor(task_descriptor, parent_task_record, strict)
 
         if is_tail_spawn:
             return None
@@ -1335,7 +1339,7 @@ class SimpleExecutor(BaseExecutor):
         self.resolve_required_refs(self.args)
         
         # start profiling, if enabled
-        if task_descriptor['task_private']['profiling_enabled']:
+        if 'profiling_enabled' in task_descriptor['task_private'] and task_descriptor['task_private']['profiling_enabled']:
             self.profiler = profiler.SarProfiler(self.block_store)
             self.profile_output = self.open_profile_output()
             self.profiler.start(self.profile_output.get_filename())

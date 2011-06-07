@@ -47,10 +47,18 @@ class FeatureQueues:
 
 class Worker:
     
+    DIRECT_HTTP_RPC = 0
+    C2DM_PUSH = 1
+    cm_names = ["DIRECT_HTTP_RPC", "C2DM_PUSH"]
+    
     def __init__(self, worker_id, worker_descriptor, feature_queues, worker_pool):
         self.id = worker_id
         self.netloc = worker_descriptor['netloc']
         self.features = worker_descriptor['features']
+        try:
+            self.communication_mechanism = worker_descriptor['communication_mechanism']
+        except KeyError:
+            self.communication_mechanism = self.DIRECT_HTTP_RPC
         self.scheduling_classes = worker_descriptor['scheduling_classes']
         self.last_ping = datetime.datetime.now()
         self.failed = False
@@ -79,7 +87,8 @@ class Worker:
                 'netloc': self.netloc,
                 'features': self.features,
                 'last_ping': self.last_ping.ctime(),
-                'failed':  self.failed}
+                'failed':  self.failed,
+                'communication_mechanism': self.cm_names[self.communication_mechanism]}
         
 class WorkerPool:
     
