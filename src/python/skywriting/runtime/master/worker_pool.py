@@ -60,7 +60,12 @@ class Worker:
         except KeyError:
             self.communication_mechanism = self.DIRECT_HTTP_RPC
         self.scheduling_classes = worker_descriptor['scheduling_classes']
-        self.last_ping = datetime.datetime.now()
+        
+        if self.communication_mechanism == self.C2DM_PUSH:
+            self.last_ping = None
+        else:
+            self.last_ping = datetime.datetime.now()
+        
         self.failed = False
         self.worker_pool = worker_pool
 
@@ -88,7 +93,7 @@ class Worker:
                 'features': self.features,
                 'last_ping': self.last_ping.ctime(),
                 'failed':  self.failed,
-                'communication_mechanism': self.cm_names[self.communication_mechanism]}
+                'communication_mechanism': self.communication_mechanism}
         
 class WorkerPool:
     
@@ -227,10 +232,11 @@ class WorkerPool:
             self.job_pool.notify_worker_failed(worker)
 
     def worker_ping(self, worker):
-        with self._lock:
-            self.event_count += 1
-            self.event_condvar.notify_all()
-        worker.last_ping = datetime.datetime.now()
+        if worker.last_ping is not None:
+            with self._lock:
+                self.event_count += 1
+                self.event_condvar.notify_all()
+            worker.last_ping = datetime.datetime.now()
 
     def server_stopping(self):
         with self._lock:
