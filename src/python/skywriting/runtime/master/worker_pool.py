@@ -91,7 +91,7 @@ class Worker:
         return {'worker_id': self.id,
                 'netloc': self.netloc,
                 'features': self.features,
-                'last_ping': self.last_ping.ctime(),
+                'last_ping': self.last_ping.ctime() if self.last_ping is not None else None,
                 'failed':  self.failed,
                 'communication_mechanism': self.communication_mechanism}
         
