@@ -119,7 +119,7 @@ class WorkerPool:
         self.is_stopping = False
         self.scheduling_class_capacities = {}
         self.scheduling_class_total_capacities = {}
-        self.c2dm_auth_mgr = C2DMAuth()
+        self.c2dm_mgr = C2DMTools()
 
     def subscribe(self):
         self.bus.subscribe('start', self.start, 75)
@@ -160,7 +160,7 @@ class WorkerPool:
             
             if worker.communication_mechanism == worker.C2DM_PUSH:
                 # register with Google
-                self.c2dm_auth_mgr.authenticate()
+                self.c2dm_mgr.authenticate()
             
             for scheduling_class, capacity in worker.scheduling_classes.items():
                 try:
@@ -215,7 +215,7 @@ class WorkerPool:
             message = simplejson.dumps(task.as_descriptor(), cls=SWReferenceJSONEncoder)
             if worker.communication_mechanism == Worker.C2DM_PUSH:
                 # magic push notification
-                pass
+                self.c2dm_mgr.send_message(worker, message)
             else:
                 post_string_noreturn("http://%s/control/task/" % (worker.netloc), message, result_callback=self.worker_post_result_callback)
         except:
@@ -321,7 +321,7 @@ class WorkerPool:
             else:
                 ciel.log("Asynchronous post against %s failed, but we have no matching worker. Ignored." % url, "WORKER_POOL", logging.WARNING)
 
-class C2DMAuth:
+class C2DMTools:
     
     GOOGLE_ID = "cam.ciel@gmail.com"
     GOOGLE_PWD = "clisawesome"
@@ -332,25 +332,44 @@ class C2DMAuth:
     
     def authenticate(self):
         if self.auth_token is None:
-            #print "Email=%s&Passwd=%s&accountType=HOSTED_OR_GOOGLE&source=%s&service=ac2dm" % (self.GOOGLE_ID, self.GOOGLE_PWD, self.PACKAGE_NAME)
-            #print post_string("https://www.google.com/accounts/ClientLogin", "Email=%s&Passwd=%s&accountType=HOSTED_OR_GOOGLE&source=%s&service=ac2dm" % (self.GOOGLE_ID, self.GOOGLE_PWD, self.PACKAGE_NAME))
-            
-            params = urllib.urlencode({'Email': self.GOOGLE_ID, 'Passwd': self.GOOGLE_PWD, 'accountType': "HOSTED_OR_GOOGLE", 'source': self.PACKAGE_NAME, 'service': "ac2dm"})
-            headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain"}
-            conn = httplib.HTTPSConnection("www.google.com")
-            conn.request("POST", "/accounts/ClientLogin", params, headers)
-            response = conn.getresponse()
-            print response.status, response.reason
-            data = response.read()
+            data = self._post_https_formenc("www.google.com", "/accounts/ClientLogin", {'Email': self.GOOGLE_ID, 
+                                                                                  'Passwd': self.GOOGLE_PWD, 
+                                                                                  'accountType': "HOSTED_OR_GOOGLE", 
+                                                                                  'source': self.PACKAGE_NAME, 
+                                                                                  'service': "ac2dm"})
             for line in data.splitlines():
                 m = re.match(r"Auth=(.+)", line)
                 if m is not None:
-                    print "auth token is: " + m.group(1)
                     self.auth_token = m.group(1)
-            conn.close()
         else:
             return self.auth_token
         
-    def getToken(self):
+    def get_token(self):
         return self.auth_token
     
+    def send_message(self, worker, message):
+        if self.auth_token is not None:
+            resp = self._post_https_formenc("android.apis.google.com", "/c2dm/send", {'registration_id': worker.netloc,
+                                                                                      'data.message': message,
+                                                                                      'collapse_key': "new"},
+                                                                                      {'Authorization': "Google auth=" + self.auth_token})
+            print resp
+        else:
+            pass
+        
+    def _post_https_formenc(self, host, path, data, add_headers=None):
+        params = urllib.urlencode(data)
+        headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain"}
+        if add_headers is not None:
+            headers = dict(headers.items() + add_headers.items())
+        conn = httplib.HTTPSConnection(host)
+        conn.request("POST", path, params, headers)
+        response = conn.getresponse()
+        try:
+            if response.status == 200:
+                data = response.read()
+                return data
+            else:
+                print "ERROR POSTing to Google: response was " + str(response.status) + " " + response.reason
+        finally:
+            conn.close()
