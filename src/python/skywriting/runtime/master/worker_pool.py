@@ -16,6 +16,9 @@ from Queue import Queue
 from shared.references import SWReferenceJSONEncoder
 from skywriting.runtime.pycurl_rpc import post_string_noreturn, get_string,\
     post_string
+import httplib2
+import urllib
+import httplib
 import ciel
 import datetime
 import logging
@@ -328,7 +331,16 @@ class C2DMAuth:
     
     def authenticate(self):
         if self.auth_token is None:
-            print "Email=%s&Passwd=%s&accountType=HOSTED_OR_GOOGLE&source=%s&service=ac2dm" % (self.GOOGLE_ID, self.GOOGLE_PWD, self.PACKAGE_NAME)
-            print post_string("https://www.google.com/accounts/ClientLogin", "Email=%s&Passwd=%s&accountType=HOSTED_OR_GOOGLE&source=%s&service=ac2dm" % (self.GOOGLE_ID, self.GOOGLE_PWD, self.PACKAGE_NAME))
+            #print "Email=%s&Passwd=%s&accountType=HOSTED_OR_GOOGLE&source=%s&service=ac2dm" % (self.GOOGLE_ID, self.GOOGLE_PWD, self.PACKAGE_NAME)
+            #print post_string("https://www.google.com/accounts/ClientLogin", "Email=%s&Passwd=%s&accountType=HOSTED_OR_GOOGLE&source=%s&service=ac2dm" % (self.GOOGLE_ID, self.GOOGLE_PWD, self.PACKAGE_NAME))
+            
+            params = urllib.urlencode({'Email': self.GOOGLE_ID, 'Passwd': self.GOOGLE_PWD, 'accountType': "HOSTED_OR_GOOGLE", 'source': self.PACKAGE_NAME, 'service': "ac2dm"})
+            headers = {"Content-type": "application/x-www-form-urlencoded", "Accept": "text/plain"}
+            conn = httplib.HTTPSConnection("www.google.com")
+            conn.request("POST", "/accounts/ClientLogin", params, headers)
+            response = conn.getresponse()
+            print response.status, response.reason
+            data = response.read()
+            conn.close()
         else:
             return self.auth_token
