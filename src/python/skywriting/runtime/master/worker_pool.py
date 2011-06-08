@@ -115,6 +115,7 @@ class WorkerPool:
         self.is_stopping = False
         self.scheduling_class_capacities = {}
         self.scheduling_class_total_capacities = {}
+        self.c2dm_auth_mgr = C2DMAuth()
 
     def subscribe(self):
         self.bus.subscribe('start', self.start, 75)
@@ -133,7 +134,6 @@ class WorkerPool:
         self.netlocs = {}
         self.idle_set = set()
         self.feature_queues = FeatureQueues()
-        self.c2dm_auth_mgr = C2DMAuth()
         
     def allocate_worker_id(self):
         return str(uuid.uuid1())
