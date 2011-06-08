@@ -328,6 +328,6 @@ class C2DMAuth:
     
     def authenticate(self):
         if self.auth_token is None:
-            print post_string("https://www.google.com/accounts/ClientLogin", {"Email": self.GOOGLE_ID, "Passwd": self.GOOGLE_PWD, "accountType": "HOSTED_OR_GOOGLE", "source": self.PACKAGE_NAME, "service": "ac2dm"})
+            print post_string("https://www.google.com/accounts/ClientLogin", "Email=%s&Passwd=%s&accountType=HOSTED_OR_GOOGLE&source=%s&service=ac2dm" % (self.GOOGLE_ID, self.GOOGLE_PWD, self.PACKAGE_NAME))
         else:
             return self.auth_token
