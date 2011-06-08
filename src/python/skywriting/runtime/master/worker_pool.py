@@ -341,7 +341,8 @@ class C2DMAuth:
             conn.request("POST", "/accounts/ClientLogin", params, headers)
             response = conn.getresponse()
             print response.status, response.reason
-            for line in response.readlines():
+            data = response.read()
+            for line in data.splitlines():
                 m = re.match(r"Auth=(.+)", line)
                 if m is not None:
                     print "auth token is: " + m.group(1)
