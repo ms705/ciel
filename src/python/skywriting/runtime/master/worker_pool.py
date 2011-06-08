@@ -16,6 +16,7 @@ from Queue import Queue
 from shared.references import SWReferenceJSONEncoder
 from skywriting.runtime.pycurl_rpc import post_string_noreturn, get_string,\
     post_string
+import re
 import httplib2
 import urllib
 import httplib
@@ -340,7 +341,15 @@ class C2DMAuth:
             conn.request("POST", "/accounts/ClientLogin", params, headers)
             response = conn.getresponse()
             print response.status, response.reason
-            data = response.read()
+            for line in response.readlines():
+                m = re.match(r"Auth=(.+)", line)
+                if m is not None:
+                    print "auth token is: " + m.group(1)
+                    self.auth_token = m.group(1)
             conn.close()
         else:
             return self.auth_token
+        
+    def getToken(self):
+        return self.auth_token
+    
