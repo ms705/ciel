@@ -14,7 +14,8 @@
 from __future__ import with_statement
 from Queue import Queue
 from shared.references import SWReferenceJSONEncoder
-from skywriting.runtime.pycurl_rpc import post_string_noreturn, get_string
+from skywriting.runtime.pycurl_rpc import post_string_noreturn, get_string,\
+    post_string
 import ciel
 import datetime
 import logging
@@ -132,6 +133,7 @@ class WorkerPool:
         self.netlocs = {}
         self.idle_set = set()
         self.feature_queues = FeatureQueues()
+        self.c2dm_auth_mgr = C2DMAuth()
         
     def allocate_worker_id(self):
         return str(uuid.uuid1())
@@ -151,6 +153,10 @@ class WorkerPool:
             self.idle_set.add(id)
             self.event_count += 1
             self.event_condvar.notify_all()
+            
+            if worker.communication_mechanism == worker.C2DM_PUSH:
+                # register with Google
+                self.c2dm_auth_mgr.authenticate()
             
             for scheduling_class, capacity in worker.scheduling_classes.items():
                 try:
@@ -203,7 +209,11 @@ class WorkerPool:
     def execute_task_on_worker(self, worker, task):
         try:
             message = simplejson.dumps(task.as_descriptor(), cls=SWReferenceJSONEncoder)
-            post_string_noreturn("http://%s/control/task/" % (worker.netloc), message, result_callback=self.worker_post_result_callback)
+            if worker.communication_mechanism == Worker.C2DM_PUSH:
+                # magic push notification
+                pass
+            else:
+                post_string_noreturn("http://%s/control/task/" % (worker.netloc), message, result_callback=self.worker_post_result_callback)
         except:
             self.worker_failed(worker)
 
@@ -307,3 +317,17 @@ class WorkerPool:
             else:
                 ciel.log("Asynchronous post against %s failed, but we have no matching worker. Ignored." % url, "WORKER_POOL", logging.WARNING)
 
+class C2DMAuth:
+    
+    GOOGLE_ID = "cam.ciel@gmail.com"
+    GOOGLE_PWD = "clisawesome"
+    PACKAGE_NAME = "uk.ac.cam.cl.ciel"
+    
+    def __init__(self):
+        self.auth_token = None
+    
+    def authenticate(self):
+        if self.auth_token is None:
+            print post_string("https://www.google.com/accounts/ClientLogin", {"Email": self.GOOGLE_ID, "Passwd": self.GOOGLE_PWD, "accountType": "HOSTED_OR_GOOGLE", "source": self.PACKAGE_NAME, "service": "ac2dm"})
+        else:
+            return self.auth_token
