@@ -215,7 +215,7 @@ class WorkerPool:
             message = simplejson.dumps(task.as_descriptor(), cls=SWReferenceJSONEncoder)
             if worker.communication_mechanism == Worker.C2DM_PUSH:
                 # magic push notification
-                self.c2dm_mgr.send_message(worker, message)
+                self.c2dm_mgr.send_message(worker, ",".join([task.job.id, task.task_id]))
             else:
                 post_string_noreturn("http://%s/control/task/" % (worker.netloc), message, result_callback=self.worker_post_result_callback)
         except:
@@ -352,8 +352,17 @@ class C2DMTools:
             resp = self._post_https_formenc("android.apis.google.com", "/c2dm/send", {'registration_id': worker.netloc,
                                                                                       'data.message': message,
                                                                                       'collapse_key': "new"},
-                                                                                      {'Authorization': "Google auth=" + self.auth_token})
+                                                                                      {'Authorization': "GoogleLogin auth=" + self.auth_token})
             print resp
+            m = re.match(r"id=(.+)", resp)
+            if m is not None:
+                return m.group(1)
+            else:
+                m = re.match(r"Error=(.+)", resp)
+                if m is not None:
+                    ciel.log("ERROR sending push message: %s" % m.group(1), "C2DM", logging.ERROR)
+                else:
+                    ciel.log("Unknown error sending push message", "C2DM", logging.ERROR)
         else:
             pass
         
@@ -364,12 +373,12 @@ class C2DMTools:
             headers = dict(headers.items() + add_headers.items())
         conn = httplib.HTTPSConnection(host)
         conn.request("POST", path, params, headers)
-        response = conn.getresponse()
         try:
+            response = conn.getresponse()
             if response.status == 200:
                 data = response.read()
                 return data
             else:
-                print "ERROR POSTing to Google: response was " + str(response.status) + " " + response.reason
+                ciel.log("ERROR POSTing to Google: response was %s %s " % (str(response.status), response.reason))
         finally:
             conn.close()

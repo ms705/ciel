@@ -172,7 +172,7 @@ class DataRoot:
     def default(self, id):
         safe_id = id
         if cherrypy.request.method == 'GET':
-            filename = self.block_store.streaming_filename(safe_id)
+            filename = self.block_store.producer_filename(safe_id)
             response_body = serve_file(filename)
             return response_body
 #            filename = self.block_store.filename(safe_id)
