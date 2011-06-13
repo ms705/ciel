@@ -56,6 +56,14 @@ class TwoRandomChoiceSchedulingPolicy(SchedulingPolicy):
         else:
             return (worker2, [])
 
+class ExecFeaturesSchedulingPolicy(SchedulingPolicy):
+    
+    def __init__(self):
+        pass
+    
+    def select_worker_for_task(self, task, worker_pool):
+        return worker_pool.get_random_worker_with_exec_feature(task.handler), []
+
 class LocalitySchedulingPolicy(SchedulingPolicy):
     
     def __init__(self, sweetheart_factor=1000, equally_local_margin=0.9, stream_source_bytes_equivalent=10000000, min_saving_threshold=1048576):
@@ -128,7 +136,8 @@ class LocalitySchedulingPolicy(SchedulingPolicy):
         
 SCHEDULING_POLICIES = {'random' : RandomSchedulingPolicy,
                        'tworandom' : TwoRandomChoiceSchedulingPolicy,
-                       'locality' : LocalitySchedulingPolicy}
+                       'locality' : LocalitySchedulingPolicy,
+                       'execfeatures' : ExecFeaturesSchedulingPolicy}
 
 def get_scheduling_policy(policy_name, *args, **kwargs):
     if policy_name is None:

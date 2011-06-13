@@ -119,6 +119,7 @@ class WorkerPool:
         self.is_stopping = False
         self.scheduling_class_capacities = {}
         self.scheduling_class_total_capacities = {}
+        self.exec_features = {}
         self.c2dm_mgr = C2DMTools()
 
     def subscribe(self):
@@ -172,7 +173,13 @@ class WorkerPool:
                     current_total = 0
                 capacities.append((worker, capacity))
                 self.scheduling_class_total_capacities[scheduling_class] = current_total + capacity
-
+            
+            for feature in worker.features:
+                try:
+                    self.exec_features[feature].append(worker)
+                except:
+                    self.exec_features[feature] = [worker]
+            
             self.job_pool.notify_worker_added(worker)
             return id
 
@@ -292,6 +299,21 @@ class WorkerPool:
             
             ciel.log('Ran out of workers in capacity-weighted selection class=%s selected=%d total=%d' % (scheduling_class, selected_slot, total_capacity), 'WORKER_POOL', logging.ERROR)
             
+    def get_random_worker_with_exec_feature(self, feature):
+        
+        ciel.log("Requested worker with exec feature %s" % feature, 'WORKER_POOL', logging.INFO)
+        
+        with self._lock:
+            try:
+                candidates = self.exec_features[feature]
+            except KeyError:
+                ciel.log('No workers supporting "%s" execution feature exist!' % (feature), 'WORKER_POOL', logging.ERROR)
+                
+            selected_slot = random.randrange(len(candidates))
+            
+            return candidates[selected_slot]
+            
+
     def get_worker_at_netloc(self, netloc):
         try:
             return self.netlocs[netloc]
@@ -353,7 +375,7 @@ class C2DMTools:
                                                                                       'data.message': message,
                                                                                       'collapse_key': "new"},
                                                                                       {'Authorization': "GoogleLogin auth=" + self.auth_token})
-            print resp
+            #print resp
             m = re.match(r"id=(.+)", resp)
             if m is not None:
                 return m.group(1)

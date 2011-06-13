@@ -95,7 +95,7 @@ class ExecutionFeatures:
         self.executors = dict([(x.handler_name, x) for x in [SkywritingExecutor, SkyPyExecutor, SWStdinoutExecutor, 
                                                            EnvironmentExecutor, JavaExecutor, DotNetExecutor, 
                                                            CExecutor, GrabURLExecutor, SyncExecutor, InitExecutor,
-                                                           Java2Executor, OCamlExecutor, ProcExecutor]])
+                                                           Java2Executor, OCamlExecutor, ProcExecutor, AndroidExecutor]])
         self.runnable_executors = dict([(x, self.executors[x]) for x in self.check_executors()])
         cacheable_executors = [SkywritingExecutor, SkyPyExecutor, Java2Executor]
         self.process_cacheing_executors = filter(lambda x: x in self.runnable_executors.values(), cacheable_executors)
@@ -230,7 +230,7 @@ def accumulate_leaf_values(f, value):
 
 class BaseExecutor:
     
-    TASK_PRIVATE_ENCODING = 'pickle'
+    TASK_PRIVATE_ENCODING = 'json'
     
     def __init__(self, worker):
         self.worker = worker
@@ -545,9 +545,15 @@ class ProcExecutor(BaseExecutor):
         task_private_id = ("%s:_private" % task_descriptor["task_id"])
         if is_fixed:
             task_private_ref = SW2_FixedReference(task_private_id, get_own_netloc())
-            write_fixed_ref_string(pickle.dumps(task_descriptor["task_private"]), task_private_ref)
+            if BaseExecutor.TASK_PRIVATE_ENCODING == "pickle":
+                write_fixed_ref_string(pickle.dumps(task_descriptor["task_private"]), task_private_ref)
+            elif BaseExecutor.TASK_PRIVATE_ENCODING == "json":
+                write_fixed_ref_string(simplejson.dumps(task_descriptor["task_private"], cls=SWReferenceJSONEncoder), task_private_ref);
         else:
-            task_private_ref = ref_from_string(pickle.dumps(task_descriptor["task_private"]), task_private_id)
+            if BaseExecutor.TASK_PRIVATE_ENCODING == "pickle":
+                task_private_ref = ref_from_string(pickle.dumps(task_descriptor["task_private"]), task_private_id)
+            elif BaseExecutor.TASK_PRIVATE_ENCODING == "json":
+                task_private_ref = ref_from_string(simplejson.dumps(task_descriptor["task_private"], cls=SWReferenceJSONEncoder), task_private_id);
         parent_task_record.publish_ref(task_private_ref)
         
         task_descriptor["task_private"] = task_private_ref
@@ -1283,7 +1289,7 @@ class SimpleExecutor(BaseExecutor):
 
         # Add the args dict
         args_name = "%ssimple_exec_args" % name_prefix
-        args_ref = ref_from_object(args, "pickle", args_name)
+        args_ref = ref_from_object(args, BaseExecutor.TASK_PRIVATE_ENCODING, args_name)
         parent_task_record.publish_ref(args_ref)
         task_descriptor["dependencies"].append(args_ref)
         task_descriptor["task_private"]["simple_exec_args"] = args_ref
@@ -1330,7 +1336,7 @@ class SimpleExecutor(BaseExecutor):
         self.output_ids = task_descriptor["expected_outputs"]
         self.output_refs = [None for _ in range(len(self.output_ids))]
         self.succeeded = False
-        self.args = retrieve_object_for_ref(task_private["simple_exec_args"], "pickle", self.task_record)
+        self.args = retrieve_object_for_ref(task_private["simple_exec_args"], BaseExecutor.TASK_PRIVATE_ENCODING, self.task_record)
 
         try:
             self.debug_opts = self.args['debug_options']
@@ -1853,6 +1859,56 @@ class SyncExecutor(SimpleExecutor):
         reflist = [self.task_record.retrieve_ref(x) for x in self.args["inputs"]]
         self.output_refs[0] = ref_from_object(reflist, "json", self.output_ids[0])
 
+class AndroidExecutor(BaseExecutor):
+    
+    handler_name = "android"
+    
+    def __init__(self, worker):
+        ciel.log("Init'ing Android dummy executor?!", "ANDROIDEXECUTOR", logging.WARN)
+        BaseExecutor.__init__(self, worker)
+    
+    @classmethod
+    def build_task_descriptor(cls, task_descriptor, parent_task_record, jar_lib=None, args=None, class_name=None, object_ref=None, n_outputs=1, is_tail_spawn=False, strict=False, **kwargs):
+        # XXX: Fix this
+                # More good stuff goes here.
+        #if jar_lib is None and kwargs.get("process_record_id", None) is None:
+        #    raise BlameUserException("All Java2 invocations must either specify jar libs or an existing process ID")
+        #if class_name is None and object_ref is None and kwargs.get("process_record_id", None) is None:
+        #    raise BlameUserException("All Java2 invocations must specify either a class_name or an object_ref, or else give a process ID")
+        
+        if jar_lib is not None:
+            task_descriptor["task_private"]["jar_lib"] = jar_lib
+            for jar_ref in jar_lib:
+                task_descriptor["dependencies"].append(jar_ref)
+
+        if not is_tail_spawn:
+            sha = hashlib.sha1()
+            hash_update_with_structure(sha, [args, n_outputs])
+            hash_update_with_structure(sha, class_name)
+            hash_update_with_structure(sha, object_ref)
+            hash_update_with_structure(sha, jar_lib)
+            name_prefix = "java2:%s:" % (sha.hexdigest())
+            task_descriptor["expected_outputs"] = ["%s%d" % (name_prefix, i) for i in range(n_outputs)]            
+        
+        if class_name is not None:
+            task_descriptor["task_private"]["class_name"] = class_name
+        if object_ref is not None:
+            task_descriptor["task_private"]["object_ref"] = object_ref
+            task_descriptor["dependencies"].append(object_ref)
+        if args is not None:
+            task_descriptor["task_private"]["args"] = args
+        add_package_dep(parent_task_record.package_ref, task_descriptor)
+        
+        return ProcExecutor.build_task_descriptor(task_descriptor, parent_task_record, n_extra_outputs=0, is_tail_spawn=is_tail_spawn, accept_ref_list_for_single=True, **kwargs)
+    
+    @staticmethod
+    def can_run():
+        return False
+    
+    def _execute(self):
+        ciel.log("Trying to execute something using dummy Android executor?!", "ANDROIDEXECUTOR", logging.ERROR)
+
+
 # XXX: Passing ref_of_string to get round a circular import. Should really move ref_of_string() to
 #      a nice utility package.
 def build_init_descriptor(handler, args, package_ref, master_uri, ref_of_string):
@@ -1860,7 +1916,10 @@ def build_init_descriptor(handler, args, package_ref, master_uri, ref_of_string)
                          "start_handler": handler, 
                          "start_args": args
                          } 
-    task_private_ref = ref_of_string(pickle.dumps(task_private_dict), master_uri)
+    if BaseExecutor.TASK_PRIVATE_ENCODING == "pickle":
+        task_private_ref = ref_of_string(pickle.dumps(task_private_dict), master_uri)
+    elif BaseExecutor.TASK_PRIVATE_ENCODING == "json":
+        task_private_ref = ref_of_string(simplejson.dumps(task_private_dict, cls=SWReferenceJSONEncoder), master_uri)
     return {"handler": "init", 
             "dependencies": [package_ref, task_private_ref], 
             "task_private": task_private_ref
