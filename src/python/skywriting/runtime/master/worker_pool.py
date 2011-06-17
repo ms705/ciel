@@ -377,7 +377,7 @@ class C2DMTools:
                                                                                       'data.message': message,
                                                                                       'collapse_key': "new"},
                                                                                       {'Authorization': "GoogleLogin auth=" + self.auth_token})
-            #print resp
+            print resp
             m = re.match(r"id=(.+)", resp)
             if m is not None:
                 return m.group(1)

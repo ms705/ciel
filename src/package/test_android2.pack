@@ -1,5 +1,5 @@
 {"package": 
-	    {"main": {"filename": "../sw/testandroid.sw"}},
+	    {"main": {"filename": "../sw/test_android_spawn.sw"}},
  "start": 
  	  { "handler": "swi",
  	    "args": {
