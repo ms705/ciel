@@ -1883,12 +1883,13 @@ class AndroidExecutor(BaseExecutor):
 
         if not is_tail_spawn:
             sha = hashlib.sha1()
+            hash_update_with_structure(sha, parent_task_record.task_id)
             hash_update_with_structure(sha, [args, n_outputs])
             hash_update_with_structure(sha, class_name)
             hash_update_with_structure(sha, object_ref)
             hash_update_with_structure(sha, jar_lib)
-            name_prefix = "java2:%s:" % (sha.hexdigest())
-            task_descriptor["expected_outputs"] = ["%s%d" % (name_prefix, i) for i in range(n_outputs)]            
+            name_prefix = "android:%s:" % (sha.hexdigest())
+            task_descriptor["expected_outputs"] = ["%s%d" % (name_prefix, i) for i in range(n_outputs)]
         
         if class_name is not None:
             task_descriptor["task_private"]["class_name"] = class_name

@@ -140,6 +140,7 @@ class TaskExecutionRecord:
         self.spawn_counter = 0
         self.publish_counter = 0
         self.task_descriptor = task_descriptor
+        self.task_id = task_descriptor['task_id']
         self.task_set = task_set
         self.execution_features = execution_features
         self.block_store = block_store
