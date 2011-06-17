@@ -23,6 +23,7 @@ from skywriting.runtime.master.cluster_view import WebBrowserRoot
 import ciel
 import logging
 import socket
+import datetime
 from skywriting.runtime.task_graph import TaskGraphUpdate
 
 class MasterRoot:
@@ -254,6 +255,8 @@ class MasterTaskRoot:
 
         if cherrypy.request.method == 'GET':
             if action is None:
+                t = datetime.datetime.now()
+                ciel.log("%d:%d:%d.%d GET task descriptor" % (t.hour, t.minute, t.second, t.microsecond), "TIMING", logging.INFO)
                 return simplejson.dumps(task.as_descriptor(long=True), cls=SWReferenceJSONEncoder)
             else:
                 ciel.log('Invalid operation: cannot GET with an action', 'MASTER', logging.ERROR)

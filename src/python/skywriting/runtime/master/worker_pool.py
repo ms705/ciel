@@ -371,6 +371,8 @@ class C2DMTools:
     
     def send_message(self, worker, message):
         if self.auth_token is not None:
+            t = datetime.datetime.now()
+            ciel.log("%d:%d:%d.%d POST push message" % (t.hour, t.minute, t.second, t.microsecond), "TIMING", logging.INFO)
             resp = self._post_https_formenc("android.apis.google.com", "/c2dm/send", {'registration_id': worker.netloc,
                                                                                       'data.message': message,
                                                                                       'collapse_key': "new"},
