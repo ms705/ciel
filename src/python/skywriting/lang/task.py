@@ -147,7 +147,7 @@ class SkywritingTask:
     
             self.write_output(0, lambda fp: simplejson.dump(result, fp, cls=SWReferenceJSONEncoder))
             
-        except ExecutionInterruption:
+        except ExecutionInterruption as e:
 
             cont_output = self.get_fresh_output("cont")
             cont_ref = self.write_output(cont_output, lambda fp: pickle.dump(self.continuation, fp))
@@ -206,7 +206,16 @@ class SkywritingTask:
     
     def eager_dereference(self, ref):
         # For SWI, all decodes are JSON
-        ret = self.unjson_ref(ref)
+        try:
+            ret = self.unjson_ref(ref)
+        except ReferenceUnavailableException:
+            # XXX: If we are eager dereferencing for the second time, and are now in a different task,
+            # we must add the reference to lazy_derefs so that it ends up in the dependencies of the
+            # continuation. The morally right thing to do would be to make sure that the dereferenced object
+            # is stored in the script environment somewhere (as was previously the case with the reference
+            # table), but doing this will work in the meantime!
+            self.lazy_derefs.add(ref)
+            raise
         self.lazy_derefs.discard(ref)
         return ret
     

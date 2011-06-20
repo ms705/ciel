@@ -46,6 +46,10 @@ class SWDereferenceWrapper:
     
     def __init__(self, ref):
         self.ref = ref
+        self.value = None
+        
+    def __repr__(self):
+        return "SWDereferenceWrapper(ref=%s, value=%s)" % (repr(self.ref), repr(self.value))
 
 class SWDynamicScopeWrapper:
     
@@ -260,7 +264,17 @@ class StatementExecutorVisitor(Visitor):
 
     def convert_wrapper_to_eager_dereference(self, value):
         if isinstance(value, SWDereferenceWrapper):
-            return self.context.eager_dereference(value.ref)
+            
+            # This will be set if we've successfully eager-evaluated this thunk before.
+            if value.value is not None:
+                return value.value
+            
+            ret = self.context.eager_dereference(value.ref)
+            
+            # Store the value in case we eager-evaluate this thunk again.
+            value.value = ret
+            
+            return ret
         else:
             return value
 
@@ -351,7 +365,14 @@ class ExpressionEvaluatorVisitor:
 
         try:
             if isinstance(resume_record.maybe_wrapped, SWDereferenceWrapper):
+                # This will be set if we've successfully eager-evaluated this thunk before.
+                if resume_record.maybe_wrapped.value is not None:
+                    return resume_record.maybe_wrapped.value
+                
                 ret = self.context.eager_dereference(resume_record.maybe_wrapped.ref)
+                
+                # Store the value in case we eager-evaluate this thunk again.
+                resume_record.maybe_wrapped.value = ret
             elif isinstance(resume_record.maybe_wrapped, SWDynamicScopeWrapper):
                 ret = self.context.value_of_dynamic_scope(resume_record.maybe_wrapped.identifier)
             else:
